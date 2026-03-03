@@ -1,0 +1,17 @@
+{
+  "name": "bunsai",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.8.1",
+    "preact": "^10.28.4",
+    "preact-iso": "^2.11.1"
+  }
+}
