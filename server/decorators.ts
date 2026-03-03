@@ -9,6 +9,7 @@ type RouteDef = {
 };
 
 const ROUTES = Symbol("bundana:routes");
+const METADATA = (Symbol as any).metadata ?? Symbol.for("Symbol.metadata");
 
 function pushRoute(metadata: any, def: RouteDef) {
   (metadata[ROUTES] ??= []).push(def);
@@ -23,13 +24,20 @@ export function Route(method: HttpMethod, path: string) {
   return (value: any, context: ClassMethodDecoratorContext) => {
     if (context.kind !== "method") throw new Error("@Route solo su metodi");
 
-    pushRoute(context.metadata, {
-      method,
-      path,
-      propertyKey: context.name,
-      isStatic: !!context.static,
-      middlewares: [],
-    });
+    const existing = findRoute(context.metadata, context.name);
+    if (existing) {
+      existing.method = method;
+      existing.path = path;
+      existing.isStatic = !!context.static;
+    } else {
+      pushRoute(context.metadata, {
+        method,
+        path,
+        propertyKey: context.name,
+        isStatic: !!context.static,
+        middlewares: [],
+      });
+    }
 
     return value;
   };
@@ -58,7 +66,7 @@ export function Use(...middlewares: Middleware<any>[]) {
 }
 
 export function registerClassRoutes(router: Bundana<any>, Klass: any, basePath = "") {
-  const meta = Klass?.[Symbol.metadata] ?? {};
+  const meta = Klass?.[METADATA] ?? {};
   const routes: RouteDef[] = meta[ROUTES] ?? [];
   const instance = new Klass(); // usato solo per metodi non-static
 
