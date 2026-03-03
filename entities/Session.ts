@@ -1,4 +1,5 @@
 import { sql } from "bun";
+import User from "./User";
 
 export const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 
@@ -81,8 +82,7 @@ class Session {
   }
 
   async getUser() {
-    const module = await import("./User");
-    return module.default.getById(this.userId);
+    return await User.getById(this.userId);
   }
 }
 

@@ -1,15 +1,15 @@
-import { db } from "./db/client";
+import { sql } from "bun";
 
 const runMigration = async (filePath: string): Promise<boolean> => {
   try {
-    await db.file(filePath);
-    await db`INSERT INTO migrations (name) VALUES (${filePath.split("/").pop()})`;
+    await sql.file(filePath);
+    await sql`INSERT INTO migrations (name) VALUES (${filePath.split("/").pop()})`;
     console.log(`Migration eseguita: ${filePath}`);
     return true;
   } catch (error) {
     console.error(`Errore migration ${filePath}:`, error);
     try {
-      await db`ROLLBACK`;
+      await sql`ROLLBACK`;
     } catch {
       // Ignoriamo rollback su connessione non in transazione.
     }
@@ -19,7 +19,7 @@ const runMigration = async (filePath: string): Promise<boolean> => {
 
 const getAppliedMigrations = async (): Promise<Set<string>> => {
   try {
-    const result = await db`SELECT name FROM migrations`;
+    const result = await sql`SELECT name FROM migrations`;
     return new Set(result.map((row: { name: string }) => String(row.name)));
   } catch (error: unknown) {
     const maybePostgresError = error as { errno?: string };

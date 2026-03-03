@@ -1,4 +1,4 @@
-import app from "./server/app";
+import app from "./server/app.ts";
 import client from "./client/index.html";
 import "./server/index";
 

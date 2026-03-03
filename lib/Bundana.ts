@@ -1,7 +1,9 @@
 import type { ErrorLike } from "bun";
 import { watch } from "fs";
 
-type Handler<WebSocketData> = (
+export type HttpMethod = "GET" | "POST" | "DELETE" | "PATCH" | "PUT" | "OPTIONS";
+
+export type Handler<WebSocketData> = (
     req: Bun.BunRequest,
     server: Bun.Server<WebSocketData>
 ) => Response | Promise<Response>;
@@ -12,6 +14,12 @@ export type Middleware<WebSocketData> = (
     next: () => Promise<Response>
 ) => Response | Promise<Response>;
 
+export type Route = {
+    method: HttpMethod;
+    path: string;
+    handler: Handler<any>;
+    middlewares?: Middleware<any>[];
+};
 
 /**
  * Bundana — a lightweight express-style layer for Bun's HTTP server
