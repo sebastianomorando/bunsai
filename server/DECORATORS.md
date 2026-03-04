@@ -65,6 +65,7 @@ La sessione viene letta da `req.session` se presente, altrimenti da cookie (`Ses
 ### `@RequireOwner(...)`
 
 Richiede che l’utente autenticato sia il proprietario della risorsa (`403` se mismatch).
+Per default gli utenti con `role = "admin"` bypassano il controllo owner.
 
 Forme supportate:
 
@@ -74,6 +75,8 @@ Forme supportate:
 @RequireOwner({ query: "userId" })
 
 @RequireOwner({ bodyField: "userId" })
+
+@RequireOwner({ bypassRoles: ["admin"] }) // default
 
 @RequireOwner({
   resolve: async (req) => {

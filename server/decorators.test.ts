@@ -379,14 +379,22 @@ describe("server decorators", () => {
     const handler = routeByPath(calls, "/users/:id").handler;
 
     const ownRes = await handler(
-      { params: { id: "u-1" }, session: { userId: "u-1" } } as any,
+      {
+        params: { id: "u-1" },
+        session: { userId: "u-1" },
+        user: { id: "u-1", role: "user" },
+      } as any,
       {} as any
     );
     expect(ownRes.status).toBe(200);
     expect(await ownRes.json()).toEqual({ id: "u-1" });
 
     const otherRes = await handler(
-      { params: { id: "u-2" }, session: { userId: "u-1" } } as any,
+      {
+        params: { id: "u-2" },
+        session: { userId: "u-1" },
+        user: { id: "u-1", role: "user" },
+      } as any,
       {} as any
     );
     expect(otherRes.status).toBe(403);
@@ -394,5 +402,16 @@ describe("server decorators", () => {
       error: "Accesso negato",
       code: "NOT_AUTHORIZED",
     });
+
+    const adminRes = await handler(
+      {
+        params: { id: "u-2" },
+        session: { userId: "admin-1" },
+        user: { id: "admin-1", role: "admin" },
+      } as any,
+      {} as any
+    );
+    expect(adminRes.status).toBe(200);
+    expect(await adminRes.json()).toEqual({ id: "u-2" });
   });
 });

@@ -53,12 +53,14 @@ export type RequireOwnerOptions = {
   query?: string;
   bodyField?: string;
   resolve?: OwnerResolver;
+  bypassRoles?: string[];
 };
 
 const ROUTES = Symbol("bundana:routes");
 const METADATA = (Symbol as any).metadata ?? Symbol.for("Symbol.metadata");
 const BODY_CACHE = Symbol("bundana:body-cache");
 const SESSION_CACHE = Symbol("bundana:session-cache");
+const USER_CACHE = Symbol("bundana:user-cache");
 
 function pushRoute(metadata: any, def: RouteDef) {
   (metadata[ROUTES] ??= []).push(def);
@@ -212,6 +214,13 @@ export function RequireOwner(
 
   return Guard(async (req, server) => {
     const session = await requireSession(req);
+    const currentUser = await getCurrentUser(req, session);
+    const role = readRole(currentUser) ?? readRole(session);
+    const bypassRoles = config.bypassRoles ?? ["admin"];
+    if (role && bypassRoles.includes(role)) {
+      return;
+    }
+
     const ownerId = await resolveOwnerId(req, server, config);
 
     if (!ownerId) {
@@ -381,10 +390,17 @@ async function readBody(req: Bun.BunRequest) {
 }
 
 let sessionModulePromise: Promise<{ default: any }> | null = null;
+let userModulePromise: Promise<{ default: any }> | null = null;
 
 async function getSessionModel() {
   sessionModulePromise ??= import("../entities/Session");
   const mod = await sessionModulePromise;
+  return mod.default;
+}
+
+async function getUserModel() {
+  userModulePromise ??= import("../entities/User");
+  const mod = await userModulePromise;
   return mod.default;
 }
 
@@ -421,6 +437,45 @@ async function requireSession(req: Bun.BunRequest) {
     throw new NotAuthenticatedError("Autenticazione richiesta");
   }
   return session as { userId: string };
+}
+
+function readRole(obj: unknown): string | null {
+  if (!obj || typeof obj !== "object") {
+    return null;
+  }
+  const row = obj as Record<string, unknown>;
+  const role = row.role;
+  return typeof role === "string" ? role : null;
+}
+
+async function getCurrentUser(
+  req: Bun.BunRequest,
+  session: { userId: string }
+) {
+  const cachedReq = req as Bun.BunRequest & {
+    [USER_CACHE]?: unknown | Promise<unknown>;
+    user?: unknown;
+  };
+
+  if (cachedReq.user) {
+    cachedReq[USER_CACHE] = cachedReq.user;
+    return cachedReq.user;
+  }
+
+  const cached = cachedReq[USER_CACHE];
+  if (cached !== undefined) {
+    return await cached;
+  }
+
+  const User = await getUserModel();
+  const pending = User.getById(session.userId);
+  cachedReq[USER_CACHE] = pending;
+  const user = await pending;
+  cachedReq[USER_CACHE] = user;
+  if (user) {
+    cachedReq.user = user;
+  }
+  return user;
 }
 
 async function resolveOwnerId(

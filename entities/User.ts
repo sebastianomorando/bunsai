@@ -288,7 +288,22 @@ class User {
     }
 
     const currentUser = await User.getById(session.userId);
-    return currentUser ? [currentUser] : [];
+    if (!currentUser) {
+      throw new NotAuthenticatedError("Utente sessione non trovato");
+    }
+
+    if (currentUser.role === "admin") {
+      const rows = await sql`SELECT * FROM users ORDER BY date_created DESC`;
+      return (rows as UserRecord[]).map((row) => {
+        return new User({
+          ...row,
+          date_created: new Date(row.date_created),
+          date_updated: row.date_updated ? new Date(row.date_updated) : null,
+        });
+      });
+    }
+
+    return [currentUser];
   }
 
   @Route("GET", "/api/users/by-identifier")
