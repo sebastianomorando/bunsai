@@ -275,7 +275,12 @@ export function registerClassRoutes(router: Bundana<any>, Klass: any, basePath =
             : result;
         return toResponse(output);
       } catch (error) {
-        return errorToResponse(error);
+        return errorToResponse(error, {
+          method: ctx.method,
+          url: ctx.url,
+          route: fullPath,
+          handler: String(r.propertyKey),
+        });
       }
     };
 
@@ -366,7 +371,12 @@ export function registerMethodRoutes(
             : result;
         return toResponse(output);
       } catch (error) {
-        return errorToResponse(error);
+        return errorToResponse(error, {
+          method: req.method,
+          url: req.url,
+          route: fullPath,
+          handler: String(binding.call),
+        });
       }
     };
 

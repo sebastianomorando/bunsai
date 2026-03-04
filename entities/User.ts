@@ -188,36 +188,13 @@ class User {
       date_created: new Date(),
     };
 
-    const created = await sql.begin(async (tx) => {
-      const rows = await tx`INSERT INTO users ${tx(userToInsert)} RETURNING *`;
-      const createdRow = rows[0] as UserRecord;
-
-      await tx`INSERT INTO companies ${tx({
-        id: companyId,
-        name: `Azienda ${input.username}`,
-        owner_user_id: userId,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })}`;
-
-      await tx`INSERT INTO company_users ${tx({
-        id: Bun.randomUUIDv7(),
-        company_id: companyId,
-        user_id: userId,
-        role: "owner",
-        created_at: new Date(),
-        updated_at: new Date(),
-      })}`;
-
-      await tx`UPDATE users SET default_company_id = ${companyId}, date_updated = ${new Date()} WHERE id = ${userId}`;
-
-      return createdRow;
-    });
+    const rows = await sql`INSERT INTO users ${sql(userToInsert)} RETURNING *`;
+     const createdRow = rows[0] as UserRecord;
 
     return new User({
-      ...created,
-      date_created: new Date(created.date_created),
-      date_updated: created.date_updated ? new Date(created.date_updated) : null,
+      ...createdRow,
+      date_created: new Date(createdRow.date_created),
+      date_updated: createdRow.date_updated ? new Date(createdRow.date_updated) : null,
     });
   }
 

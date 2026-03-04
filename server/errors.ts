@@ -1,4 +1,10 @@
 export type ErrorDetails = Record<string, unknown> | undefined;
+export type ErrorLogContext = {
+  method?: string;
+  url?: string;
+  route?: string;
+  handler?: string;
+};
 
 type HttpErrorOptions = {
   code?: string;
@@ -69,7 +75,35 @@ export function isHttpError(error: unknown): error is HttpError {
   return error instanceof HttpError;
 }
 
-export function errorToResponse(error: unknown): Response {
+function logError(error: unknown, context: ErrorLogContext = {}) {
+  const requestContext = [context.method, context.url].filter(Boolean).join(" ");
+  const routeContext = [context.route, context.handler].filter(Boolean).join(" ");
+  const prefix = [requestContext, routeContext].filter(Boolean).join(" | ");
+
+  if (isHttpError(error)) {
+    console.error(
+      `[RouteError ${error.status} ${error.code}]${prefix ? ` ${prefix}` : ""} - ${error.message}`
+    );
+    return;
+  }
+
+  if (error instanceof Error) {
+    console.error(
+      `[RouteError 500]${prefix ? ` ${prefix}` : ""} - ${error.message}`,
+      error
+    );
+    return;
+  }
+
+  console.error(`[RouteError 500]${prefix ? ` ${prefix}` : ""}`, error);
+}
+
+export function errorToResponse(
+  error: unknown,
+  context: ErrorLogContext = {}
+): Response {
+  logError(error, context);
+
   if (isHttpError(error)) {
     return Response.json(
       {
