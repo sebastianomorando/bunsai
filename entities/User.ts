@@ -63,6 +63,25 @@ type PublicSession = {
   expiresAt: Date | null;
 };
 
+type PaginatedUsers<T> = {
+  items: T[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  sortBy: UserSortBy;
+  sortDir: SortDirection;
+};
+
+type UserSortBy = "date_created" | "username" | "email" | "role" | "is_active";
+type SortDirection = "asc" | "desc";
+
+const DEFAULT_USERS_PAGE = 1;
+const DEFAULT_USERS_LIMIT = 10;
+const MAX_USERS_LIMIT = 100;
+const DEFAULT_USERS_SORT_BY: UserSortBy = "date_created";
+const DEFAULT_USERS_SORT_DIR: SortDirection = "desc";
+
 function toPublicUser(value: unknown): PublicUser | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -82,10 +101,93 @@ function toPublicUser(value: unknown): PublicUser | null {
   };
 }
 
+function toNumber(value: unknown, fallback: number) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function toPositiveInt(value: string | null, fallback: number) {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  const int = Math.floor(parsed);
+  return int > 0 ? int : fallback;
+}
+
+function parseUsersListPagination(req: Bun.BunRequest) {
+  const url = new URL(req.url);
+  const page = toPositiveInt(url.searchParams.get("page"), DEFAULT_USERS_PAGE);
+  const requestedLimit = toPositiveInt(url.searchParams.get("limit"), DEFAULT_USERS_LIMIT);
+  const limit = Math.min(requestedLimit, MAX_USERS_LIMIT);
+
+  const rawSortBy = url.searchParams.get("sortBy");
+  const sortBy: UserSortBy =
+    rawSortBy === "username" ||
+    rawSortBy === "email" ||
+    rawSortBy === "role" ||
+    rawSortBy === "is_active" ||
+    rawSortBy === "date_created"
+      ? rawSortBy
+      : DEFAULT_USERS_SORT_BY;
+
+  const rawSortDir = url.searchParams.get("sortDir");
+  const sortDir: SortDirection =
+    rawSortDir === "asc" || rawSortDir === "desc" ? rawSortDir : DEFAULT_USERS_SORT_DIR;
+
+  return { page, limit, sortBy, sortDir };
+}
+
 function serializeUserPayload(payload: unknown) {
   if (payload === null || payload === undefined) {
     return payload;
   }
+
+  if (typeof payload === "object" && payload !== null && "items" in payload) {
+    const row = payload as Record<string, unknown>;
+    const items = Array.isArray(row.items) ? row.items.map(toPublicUser) : [];
+    const page = toNumber(row.page, DEFAULT_USERS_PAGE);
+    const limit = toNumber(row.limit, DEFAULT_USERS_LIMIT);
+    const total = toNumber(row.total, items.length);
+    const totalPages = toNumber(
+      row.totalPages,
+      Math.max(1, Math.ceil(total / Math.max(1, limit)))
+    );
+    const sortBy =
+      (row.sortBy as UserSortBy | undefined) ??
+      (row.sort_by as UserSortBy | undefined) ??
+      DEFAULT_USERS_SORT_BY;
+    const sortDir =
+      (row.sortDir as SortDirection | undefined) ??
+      (row.sort_dir as SortDirection | undefined) ??
+      DEFAULT_USERS_SORT_DIR;
+
+    return {
+      items,
+      page,
+      limit,
+      total,
+      totalPages,
+      sortBy,
+      sortDir,
+    };
+  }
+
   if (Array.isArray(payload)) {
     return payload.map(toPublicUser);
   }
@@ -258,7 +360,7 @@ class User {
   @RequireAuth()
   @Serialize(serializeUserPayload)
   @Args(Req())
-  static async list(req: Bun.BunRequest): Promise<User[]> {
+  static async list(req: Bun.BunRequest): Promise<PaginatedUsers<User>> {
     const session = await Session.getFromRequest(req);
     if (!session) {
       throw new NotAuthenticatedError("Sessione non trovata");
@@ -269,18 +371,67 @@ class User {
       throw new NotAuthenticatedError("Utente sessione non trovato");
     }
 
+    const { page: requestedPage, limit, sortBy, sortDir } = parseUsersListPagination(req);
+
     if (currentUser.role === "admin") {
-      const rows = await sql`SELECT * FROM users ORDER BY date_created DESC`;
-      return (rows as UserRecord[]).map((row) => {
+      const totalRows = await sql`SELECT COUNT(*)::int AS total FROM users`;
+      const total = toNumber((totalRows[0] as { total?: unknown } | undefined)?.total, 0);
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const page = Math.min(requestedPage, totalPages);
+      const offset = (page - 1) * limit;
+      const rows = await sql`
+        SELECT *
+        FROM users
+        ORDER BY
+          CASE WHEN ${sortBy} = 'username' AND ${sortDir} = 'asc' THEN username END ASC,
+          CASE WHEN ${sortBy} = 'username' AND ${sortDir} = 'desc' THEN username END DESC,
+          CASE WHEN ${sortBy} = 'email' AND ${sortDir} = 'asc' THEN email END ASC,
+          CASE WHEN ${sortBy} = 'email' AND ${sortDir} = 'desc' THEN email END DESC,
+          CASE WHEN ${sortBy} = 'role' AND ${sortDir} = 'asc' THEN role END ASC,
+          CASE WHEN ${sortBy} = 'role' AND ${sortDir} = 'desc' THEN role END DESC,
+          CASE WHEN ${sortBy} = 'is_active' AND ${sortDir} = 'asc' THEN is_active END ASC,
+          CASE WHEN ${sortBy} = 'is_active' AND ${sortDir} = 'desc' THEN is_active END DESC,
+          CASE WHEN ${sortBy} = 'date_created' AND ${sortDir} = 'asc' THEN date_created END ASC,
+          CASE WHEN ${sortBy} = 'date_created' AND ${sortDir} = 'desc' THEN date_created END DESC,
+          id ASC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      `;
+      const items = (rows as UserRecord[]).map((row) => {
         return new User({
           ...row,
           date_created: new Date(row.date_created),
           date_updated: row.date_updated ? new Date(row.date_updated) : null,
         });
       });
+
+      return {
+        items,
+        page,
+        limit,
+        total,
+        totalPages,
+        sortBy,
+        sortDir,
+      };
     }
 
-    return [currentUser];
+    const visible = [currentUser];
+    const total = visible.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(requestedPage, totalPages);
+    const offset = (page - 1) * limit;
+    const items = visible.slice(offset, offset + limit);
+
+    return {
+      items,
+      page,
+      limit,
+      total,
+      totalPages,
+      sortBy,
+      sortDir,
+    };
   }
 
   @Route("GET", "/api/users/by-identifier")

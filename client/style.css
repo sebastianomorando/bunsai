@@ -191,6 +191,19 @@ body {
   gap: 0.8rem;
 }
 
+.rowactions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.muted {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .userlist {
   margin: 0.75rem 0 0;
   padding: 0;
@@ -218,6 +231,33 @@ body {
 .userrow p {
   margin: 0;
   font-size: 0.9rem;
+}
+
+.pagination {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid #e7dece;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.limitcontrol {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.limitcontrol select {
+  padding: 0.38rem 0.48rem;
+  border: 1px solid var(--line);
+  border-radius: 0.52rem;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
 }
 
 .details {
@@ -272,7 +312,15 @@ body {
     align-items: flex-start;
   }
 
+  .rowactions {
+    width: 100%;
+  }
+
   .button {
     width: 100%;
+  }
+
+  .pagination .button {
+    width: auto;
   }
 }

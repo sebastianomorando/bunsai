@@ -59,7 +59,18 @@ Set at least:
 bun run migrate.ts
 ```
 
-4. Start the app
+4. (Optional) Seed demo users
+
+```bash
+bun run seed.ts
+```
+
+This creates 50 users total (49 regular + 1 admin) and can be re-run safely.
+
+- Admin: `admin` / `admin123!`
+- Demo user: `user001` / `user123!`
+
+5. Start the app
 
 ```bash
 bun run index.ts
@@ -86,6 +97,7 @@ migrations/    # SQL migrations
 cli/           # Utility commands (create/reset users)
 index.ts       # Application entry point
 migrate.ts     # Migration runner
+seed.ts        # Demo data seeder (50 users incl. admin)
 ```
 
 ## Routing: two modes
@@ -145,8 +157,8 @@ curl -i -c cookie.txt -X POST http://localhost:3000/api/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"secret"}'
 
-# Users list (authenticated)
-curl -i -b cookie.txt http://localhost:3000/api/users
+# Users list (authenticated, paginated + sortable)
+curl -i -b cookie.txt "http://localhost:3000/api/users?page=1&limit=10&sortBy=date_created&sortDir=desc"
 
 # User detail
 curl -i -b cookie.txt http://localhost:3000/api/users/<user-id>
@@ -154,6 +166,11 @@ curl -i -b cookie.txt http://localhost:3000/api/users/<user-id>
 # Logout
 curl -i -b cookie.txt -X POST http://localhost:3000/api/logout
 ```
+
+`GET /api/users` supports pagination and ordering:
+- `page`, `limit` (default `1`/`10`, max `100`)
+- `sortBy`: `date_created`, `username`, `email`, `role`, `is_active`
+- `sortDir`: `asc`, `desc`
 
 ## Frontend
 
@@ -180,6 +197,9 @@ bun run cli/user.ts create <username> [password] [email]
 
 # Reset password (username or email)
 bun run cli/user.ts reset-password <username|email>
+
+# Seed demo users (49 user + 1 admin)
+bun run seed.ts
 ```
 
 ## Technical goal
