@@ -277,6 +277,20 @@ class User {
     });
   }
 
+  @Route("GET", "/api/users")
+  @RequireAuth()
+  @Serialize(serializeUserPayload)
+  @Args(Req())
+  static async list(req: Bun.BunRequest): Promise<User[]> {
+    const session = await Session.getFromRequest(req);
+    if (!session) {
+      throw new NotAuthenticatedError("Sessione non trovata");
+    }
+
+    const currentUser = await User.getById(session.userId);
+    return currentUser ? [currentUser] : [];
+  }
+
   @Route("GET", "/api/users/by-identifier")
   @RequireAuth()
   @RequireOwner({
