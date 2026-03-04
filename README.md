@@ -1,84 +1,94 @@
 # Bunsai
 
-`Bunsai` non nasce come framework da installare, ma come **repo da clonare e hackerare**.
+`Bunsai` is not meant to be a framework you install, but a **repository you clone and hack**.
 
-L'idea: darti una base full stack Bun pronta all'uso, con il minimo livello di astrazione possibile sulle API native di Bun, così puoi piegarla alle tue esigenze senza combattere contro convenzioni rigide.
+The idea is to give you a full-stack Bun baseline that is ready to run, with the thinnest possible abstraction over Bun’s native APIs, so you can adapt it to your real needs without fighting heavy conventions.
 
-## Filosofia
+## Philosophy
 
-- Clone > install: forka/clona il progetto e personalizzalo.
-- Thin layer: `Bundana` è uno strato leggero sopra `Bun.serve()`.
-- Full stack essenziale: backend, frontend, auth di esempio, migrazioni DB, CLI.
-- Type-safe by default: tutto in TypeScript con configurazione strict.
-- Due stili di routing: express-style classico **oppure** decorators su classi/entity.
+- Clone > install: fork/clone the project and customize it.
+- Thin layer: `Bundana` is a lightweight layer over `Bun.serve()`.
+- Essential full stack: backend, frontend, auth example, DB migrations, CLI.
+- Type-safe by default: everything is TypeScript with strict settings.
+- Two routing styles: classic express-style routing **or** decorators on classes/entities.
 
-## Cosa include il progetto
+## What the project includes
 
-- Backend HTTP su Bun (`lib/Bundana.ts` + `server/*`)
-- Routing express-style (`app.get/post/put/...`) e routing decorator-based
-- Sistema decorators avanzato:
-  - binding argomenti (`@Args`, `Param`, `Body`, `Query`, ...)
+- Bun HTTP backend (`lib/Bundana.ts` + `server/*`)
+- Express-style routing (`app.get/post/put/...`) and decorator-based routing
+- Advanced decorator system:
+  - argument binding (`@Args`, `Param`, `Body`, `Query`, ...)
   - auth/ownership (`@RequireAuth`, `@RequireOwner`)
-  - serializzazione (`@Serialize`)
-  - mapping errori HTTP tipizzati
-- Auth di esempio con sessioni cookie-based
-- Frontend con:
+  - serialization (`@Serialize`)
+  - typed HTTP error mapping
+- Example auth with cookie-based sessions
+- Frontend with:
   - `preact`
   - `@preact/signals`
-  - `preact-iso` (routing client-side)
-- Migrazioni SQL (`migrations/*.sql`) + runner (`migrate.ts`)
-- CLI di utilità (`cli/user.ts`)
+  - `preact-iso` (client-side routing)
+- SQL migrations (`migrations/*.sql`) + runner (`migrate.ts`)
+- Utility CLI (`cli/user.ts`)
 
-## Prerequisiti
+## Prerequisites
 
-- Bun (consigliato `>= 1.3.x`)
+- Bun (recommended `>= 1.3.x`)
 - PostgreSQL
 
 ## Quickstart
 
-1. Installa dipendenze
+1. Install dependencies
 
 ```bash
 bun install
 ```
 
-2. Configura env
+2. Configure env
 
 ```bash
 cp .env.example .env
 ```
 
-Imposta almeno:
+Set at least:
 
 - `DATABASE_URL`
-- `PORT` (opzionale, default 3000)
+- `PORT` (optional, default 3000)
 
-3. Esegui migrazioni
+3. Run migrations
 
 ```bash
 bun run migrate.ts
 ```
 
-4. Avvia app
+4. Start the app
 
 ```bash
 bun run index.ts
 ```
 
-## Struttura (high-level)
+## Bootstrap with `bun create` (optional)
+
+```bash
+bun create sebastianomorando/bunsai my-bunsai-app
+cd my-bunsai-app
+cp .env.example .env
+bun run migrate.ts
+bun run index.ts
+```
+
+## Structure (high-level)
 
 ```txt
-client/        # Frontend Preact + signals + preact-iso
-entities/      # Dominio/model (User, Session) con business logic
-server/        # App server, decorators, error handling
-lib/           # Bundana (layer HTTP sottile sopra Bun)
+client/        # Preact frontend + signals + preact-iso
+entities/      # Domain/models (User, Session) with business logic
+server/        # Server app, decorators, error handling
+lib/           # Bundana (thin HTTP layer over Bun)
 migrations/    # SQL migrations
-cli/           # Comandi utili (creazione/reset utenti)
-index.ts       # Entry point applicazione
+cli/           # Utility commands (create/reset users)
+index.ts       # Application entry point
 migrate.ts     # Migration runner
 ```
 
-## Routing: due modalità
+## Routing: two modes
 
 ### 1) Express-style (Bundana)
 
@@ -89,7 +99,7 @@ app.get("/health", () => Response.json({ ok: true }));
 app.post("/echo", async (req) => Response.json(await req.json()));
 ```
 
-### 2) Decorator-based su classi/entity
+### 2) Decorator-based on classes/entities
 
 ```ts
 class UserController {
@@ -104,25 +114,25 @@ class UserController {
 }
 ```
 
-In `index.ts` le route decorate vengono registrate con:
+In `index.ts`, decorated routes are registered with:
 
 ```ts
 registerClassRoutes(app, User);
 ```
 
-## Auth e autorizzazione (stato attuale)
+## Auth & authorization (current state)
 
-- Login/logout via sessione cookie (`session_id`)
-- `@RequireAuth()` -> blocca richieste non autenticate (`401`)
-- `@RequireOwner(...)` -> accesso solo al proprietario (`403`)
-- Bypass admin: per default utenti con `role = "admin"` non hanno restrizioni owner
-- Lista utenti:
-  - utente normale: vede solo sé stesso
-  - admin: vede tutti gli utenti
+- Login/logout via cookie session (`session_id`)
+- `@RequireAuth()` -> blocks unauthenticated requests (`401`)
+- `@RequireOwner(...)` -> owner-only access (`403`)
+- Admin bypass: by default, users with `role = "admin"` bypass owner checks
+- User listing:
+  - normal user: sees only themselves
+  - admin: sees all users
 
-## API demo (pratiche)
+## Practical API demo
 
-Esempio flusso con cookie jar:
+Example flow with cookie jar:
 
 ```bash
 # Register
@@ -130,15 +140,15 @@ curl -i -X POST http://localhost:3000/api/register \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","email":"alice@example.com","password":"secret"}'
 
-# Login (salva cookie)
+# Login (save cookie)
 curl -i -c cookie.txt -X POST http://localhost:3000/api/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"secret"}'
 
-# Lista utenti (autenticato)
+# Users list (authenticated)
 curl -i -b cookie.txt http://localhost:3000/api/users
 
-# Dettaglio utente
+# User detail
 curl -i -b cookie.txt http://localhost:3000/api/users/<user-id>
 
 # Logout
@@ -147,13 +157,13 @@ curl -i -b cookie.txt -X POST http://localhost:3000/api/logout
 
 ## Frontend
 
-Il frontend è in `client/` ed è già configurato per:
+Frontend lives in `client/` and is already configured for:
 
-- Preact (`jsxImportSource: "preact"` nel `tsconfig`)
-- stato con signals
-- routing con `preact-iso`
+- Preact (`jsxImportSource: "preact"` in `tsconfig`)
+- state with signals
+- routing with `preact-iso`
 
-Pagine incluse:
+Included pages:
 
 - `/register`
 - `/login`
@@ -162,28 +172,28 @@ Pagine incluse:
 
 ## CLI
 
-Comandi disponibili:
+Available commands:
 
 ```bash
-# Crea utente
+# Create user
 bun run cli/user.ts create <username> [password] [email]
 
-# Reset password (username o email)
+# Reset password (username or email)
 bun run cli/user.ts reset-password <username|email>
 ```
 
-## Obiettivo tecnico
+## Technical goal
 
-Bunsai vuole restare:
+Bunsai is intended to stay:
 
-- leggibile
-- modificabile
-- pragmatico
+- readable
+- modifiable
+- pragmatic
 
-Nessun lock-in: il codice è tuo, puoi cambiare naming, convenzioni, sicurezza, dominio, UI e workflow in base al prodotto reale.
+No lock-in: the code is yours, and you can change naming, conventions, security rules, domain logic, UI, and workflow for your actual product.
 
-## Documentazione interna
+## Internal documentation
 
 - Decorators: `server/DECORATORS.md`
-- Error handling HTTP: `server/ERRORS.md`
-- Istruzioni coding agents: `AGENTS.md`
+- HTTP error handling: `server/ERRORS.md`
+- Coding agent instructions: `AGENTS.md`
