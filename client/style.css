@@ -59,6 +59,23 @@ body {
   gap: 0.75rem;
 }
 
+.langswitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.langswitch select {
+  padding: 0.32rem 0.44rem;
+  border: 1px solid var(--line);
+  border-radius: 0.48rem;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
 .menu a,
 .linklike {
   color: var(--ink);
@@ -304,6 +321,11 @@ body {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .langswitch {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .row,

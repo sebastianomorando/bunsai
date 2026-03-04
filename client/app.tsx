@@ -21,6 +21,7 @@ type PublicUser = {
 
 type UserSortBy = "date_created" | "username" | "email" | "role" | "is_active";
 type SortDirection = "asc" | "desc";
+type Locale = "en" | "it";
 
 type PaginatedUsers = {
   items: PublicUser[];
@@ -45,8 +46,196 @@ type ApiClientError = Error & {
 const DEFAULT_USERS_LIMIT = 10;
 const DEFAULT_USERS_SORT_BY: UserSortBy = "date_created";
 const DEFAULT_USERS_SORT_DIR: SortDirection = "desc";
+const DEFAULT_LOCALE: Locale = "en";
+const LOCALE_STORAGE_KEY = "bunsai:frontend:locale";
+
+const translations = {
+  en: {
+    "error.operationFailed": "Operation failed",
+    "error.http": "HTTP error {status}",
+    "error.badRequest": "Bad request",
+    "error.notAuthenticated": "Authentication required",
+    "error.notAuthorized": "Access denied",
+    "error.notFound": "Resource not found",
+    "error.conflict": "Conflict",
+    "error.validation": "Validation failed",
+    "error.rateLimited": "Too many requests",
+    "error.internal": "Internal server error",
+    "error.genericHttp": "Unexpected error",
+
+    "notice.logoutSuccess": "Logged out",
+    "notice.registerSuccess": "Registration completed and login successful",
+    "notice.loginSuccess": "Login successful",
+
+    "brand.title": "Bunsai Users",
+
+    "nav.login": "Login",
+    "nav.register": "Register",
+    "nav.users": "Users",
+    "nav.logout": "Logout",
+
+    "language.label": "Language",
+    "language.en": "English",
+    "language.it": "Italiano",
+
+    "home.title": "User management",
+    "home.description": "Small app with registration, login, logout, user list and user details.",
+    "home.gotoUsers": "Go to users list",
+    "home.createAccount": "Create account",
+    "home.signIn": "Sign in",
+
+    "register.title": "Register",
+    "register.submitLoading": "Submitting...",
+    "register.submit": "Register",
+
+    "login.title": "Login",
+    "login.submitLoading": "Submitting...",
+    "login.submit": "Login",
+
+    "field.username": "Username",
+    "field.email": "Email",
+    "field.password": "Password",
+    "field.usernameOrEmail": "Username or email",
+
+    "users.authRequiredTitle": "Authentication required",
+    "users.authRequiredText": "You must sign in before viewing users.",
+    "users.goToLogin": "Go to login",
+    "users.title": "Users list",
+    "users.sortBy": "Sort by",
+    "users.sortBy.date_created": "Created date",
+    "users.sortBy.username": "Username",
+    "users.sortBy.email": "Email",
+    "users.sortBy.role": "Role",
+    "users.sortBy.is_active": "Active status",
+    "users.direction": "Direction",
+    "users.direction.desc": "Descending",
+    "users.direction.asc": "Ascending",
+    "users.refresh": "Refresh",
+    "users.pageSummary": "Page {page} of {totalPages} · Total visible users: {total}",
+    "users.empty": "No users available for this account.",
+    "users.unnamed": "Unnamed user",
+    "users.noEmail": "Email not available",
+    "users.detail": "Details",
+    "users.prev": "Previous",
+    "users.next": "Next",
+    "users.perPage": "Per page",
+
+    "detail.title": "User details",
+    "detail.loading": "Loading user details...",
+    "detail.id": "ID",
+    "detail.username": "Username",
+    "detail.email": "Email",
+    "detail.role": "Role",
+    "detail.active": "Active",
+    "detail.createdAt": "Created on",
+    "detail.activeYes": "Yes",
+    "detail.activeNo": "No",
+    "detail.backToList": "Back to list",
+
+    "notfound.title": "Page not found",
+    "notfound.backHome": "Back to home",
+
+    "role.admin": "Admin",
+    "role.user": "User",
+
+    "common.na": "-",
+  },
+  it: {
+    "error.operationFailed": "Operazione fallita",
+    "error.http": "Errore HTTP {status}",
+    "error.badRequest": "Richiesta non valida",
+    "error.notAuthenticated": "Autenticazione richiesta",
+    "error.notAuthorized": "Accesso negato",
+    "error.notFound": "Risorsa non trovata",
+    "error.conflict": "Conflitto",
+    "error.validation": "Validazione fallita",
+    "error.rateLimited": "Troppe richieste",
+    "error.internal": "Errore interno del server",
+    "error.genericHttp": "Errore imprevisto",
+
+    "notice.logoutSuccess": "Logout effettuato",
+    "notice.registerSuccess": "Registrazione completata e login effettuato",
+    "notice.loginSuccess": "Accesso effettuato",
+
+    "brand.title": "Bunsai Users",
+
+    "nav.login": "Login",
+    "nav.register": "Registrazione",
+    "nav.users": "Utenti",
+    "nav.logout": "Logout",
+
+    "language.label": "Lingua",
+    "language.en": "English",
+    "language.it": "Italiano",
+
+    "home.title": "Gestione utenti",
+    "home.description": "Mini app con registrazione, login, logout, lista utenti e dettaglio utente.",
+    "home.gotoUsers": "Vai alla lista utenti",
+    "home.createAccount": "Crea account",
+    "home.signIn": "Accedi",
+
+    "register.title": "Registrazione",
+    "register.submitLoading": "Invio...",
+    "register.submit": "Registrati",
+
+    "login.title": "Login",
+    "login.submitLoading": "Invio...",
+    "login.submit": "Accedi",
+
+    "field.username": "Username",
+    "field.email": "Email",
+    "field.password": "Password",
+    "field.usernameOrEmail": "Username o email",
+
+    "users.authRequiredTitle": "Accesso richiesto",
+    "users.authRequiredText": "Per vedere gli utenti devi prima autenticarti.",
+    "users.goToLogin": "Vai al login",
+    "users.title": "Lista utenti",
+    "users.sortBy": "Ordina per",
+    "users.sortBy.date_created": "Data creazione",
+    "users.sortBy.username": "Username",
+    "users.sortBy.email": "Email",
+    "users.sortBy.role": "Ruolo",
+    "users.sortBy.is_active": "Stato attivo",
+    "users.direction": "Direzione",
+    "users.direction.desc": "Discendente",
+    "users.direction.asc": "Ascendente",
+    "users.refresh": "Aggiorna",
+    "users.pageSummary": "Pagina {page} di {totalPages} · Totale utenti visibili: {total}",
+    "users.empty": "Nessun utente disponibile per questo account.",
+    "users.unnamed": "Utente senza nome",
+    "users.noEmail": "Email non disponibile",
+    "users.detail": "Dettaglio",
+    "users.prev": "Precedente",
+    "users.next": "Successiva",
+    "users.perPage": "Per pagina",
+
+    "detail.title": "Dettaglio utente",
+    "detail.loading": "Caricamento dettaglio...",
+    "detail.id": "ID",
+    "detail.username": "Username",
+    "detail.email": "Email",
+    "detail.role": "Ruolo",
+    "detail.active": "Attivo",
+    "detail.createdAt": "Creato il",
+    "detail.activeYes": "Sì",
+    "detail.activeNo": "No",
+    "detail.backToList": "Torna alla lista",
+
+    "notfound.title": "Pagina non trovata",
+    "notfound.backHome": "Torna alla home",
+
+    "role.admin": "Admin",
+    "role.user": "Utente",
+
+    "common.na": "-",
+  },
+} as const;
+
+type TranslationKey = keyof (typeof translations)["en"];
 
 const sessionState = signal<SessionInfo | null>(null);
+const localeState = signal<Locale>(DEFAULT_LOCALE);
 const usersState = signal<PaginatedUsers>({
   items: [],
   page: 1,
@@ -60,6 +249,55 @@ const detailState = signal<PublicUser | null>(null);
 const pendingState = signal(false);
 const noticeState = signal<string | null>(null);
 const errorState = signal<string | null>(null);
+
+function translate(
+  locale: Locale,
+  key: TranslationKey,
+  params: Record<string, string | number> = {}
+): string {
+  const template = translations[locale][key] ?? translations[DEFAULT_LOCALE][key] ?? key;
+  return template.replace(/\{(\w+)\}/g, (_match, name) => {
+    const value = params[name];
+    return value === undefined ? "" : String(value);
+  });
+}
+
+function t(key: TranslationKey, params?: Record<string, string | number>): string {
+  return translate(localeState.value, key, params);
+}
+
+function isLocale(value: string | null): value is Locale {
+  return value === "en" || value === "it";
+}
+
+function readStoredLocale(): Locale {
+  if (typeof localStorage === "undefined") {
+    return DEFAULT_LOCALE;
+  }
+
+  const raw = localStorage.getItem(LOCALE_STORAGE_KEY);
+  return isLocale(raw) ? raw : DEFAULT_LOCALE;
+}
+
+function setLocale(nextLocale: Locale) {
+  localeState.value = nextLocale;
+
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+
+  localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+}
+
+function formatRole(role: string | null) {
+  if (role === "admin") {
+    return t("role.admin");
+  }
+  if (role === "user") {
+    return t("role.user");
+  }
+  return role ?? t("common.na");
+}
 
 function setNotice(message: string | null) {
   noticeState.value = message;
@@ -75,7 +313,36 @@ function errorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return "Operazione fallita";
+  return t("error.operationFailed");
+}
+
+const apiCodeTranslations = {
+  BAD_REQUEST: "error.badRequest",
+  NOT_AUTHENTICATED: "error.notAuthenticated",
+  NOT_AUTHORIZED: "error.notAuthorized",
+  NOT_FOUND: "error.notFound",
+  CONFLICT: "error.conflict",
+  VALIDATION_ERROR: "error.validation",
+  RATE_LIMITED: "error.rateLimited",
+  INTERNAL_SERVER_ERROR: "error.internal",
+  HTTP_ERROR: "error.genericHttp",
+} as const satisfies Record<string, TranslationKey>;
+
+function localizedApiErrorMessage(
+  code: string | undefined,
+  fallback: string | undefined,
+  status: number
+) {
+  if (code && code in apiCodeTranslations) {
+    const translationKey = apiCodeTranslations[code as keyof typeof apiCodeTranslations];
+    return t(translationKey);
+  }
+
+  if (fallback) {
+    return fallback;
+  }
+
+  return t("error.http", { status });
 }
 
 async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -97,14 +364,16 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const json = payload as ApiJsonError | null;
-    const message =
+    const code = json?.code;
+    const fallback =
       (json && typeof json === "object" && json.error) ||
       (typeof payload === "string" && payload) ||
-      `Errore HTTP ${res.status}`;
+      undefined;
+    const message = localizedApiErrorMessage(code, fallback, res.status);
 
     const err = new Error(message) as ApiClientError;
     err.status = res.status;
-    err.code = json?.code;
+    err.code = code;
     throw err;
   }
 
@@ -159,9 +428,10 @@ function normalizePaginatedUsers(payload: PaginatedUsers | PublicUser[]): Pagina
       payload.sortBy === "date_created"
         ? payload.sortBy
         : DEFAULT_USERS_SORT_BY,
-    sortDir: payload.sortDir === "asc" || payload.sortDir === "desc"
-      ? payload.sortDir
-      : DEFAULT_USERS_SORT_DIR,
+    sortDir:
+      payload.sortDir === "asc" || payload.sortDir === "desc"
+        ? payload.sortDir
+        : DEFAULT_USERS_SORT_DIR,
   };
 }
 
@@ -225,10 +495,19 @@ async function fetchUserDetail(id: string) {
 
 function AppLayout() {
   const { route } = useLocation();
+  const locale = localeState.value;
 
   useEffect(() => {
+    setLocale(readStoredLocale());
     void bootstrapFromCookie();
   }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    document.documentElement.lang = localeState.value;
+  }, [localeState.value]);
 
   const onLogout = async () => {
     pendingState.value = true;
@@ -245,7 +524,7 @@ function AppLayout() {
         sortDir: DEFAULT_USERS_SORT_DIR,
       };
       detailState.value = null;
-      setNotice("Logout effettuato");
+      setNotice(t("notice.logoutSuccess"));
       route("/login");
     } catch (error) {
       setError(errorMessage(error));
@@ -258,19 +537,34 @@ function AppLayout() {
     <main class="page">
       <header class="topbar">
         <a class="brand" href="/">
-          Bunsai Users
+          {t("brand.title")}
         </a>
         <nav class="menu">
+          <label class="langswitch">
+            <span>{t("language.label")}</span>
+            <select
+              value={locale}
+              onChange={(event) => {
+                const next = (event.target as HTMLSelectElement).value;
+                if (next === "en" || next === "it") {
+                  setLocale(next);
+                }
+              }}
+            >
+              <option value="en">{t("language.en")}</option>
+              <option value="it">{t("language.it")}</option>
+            </select>
+          </label>
           {!sessionState.value ? (
             <>
-              <a href="/login">Login</a>
-              <a href="/register">Registrazione</a>
+              <a href="/login">{t("nav.login")}</a>
+              <a href="/register">{t("nav.register")}</a>
             </>
           ) : (
             <>
-              <a href="/users">Utenti</a>
+              <a href="/users">{t("nav.users")}</a>
               <button type="button" class="linklike" onClick={onLogout}>
-                Logout
+                {t("nav.logout")}
               </button>
             </>
           )}
@@ -297,21 +591,19 @@ function AppLayout() {
 function HomePage() {
   return (
     <div class="panel">
-      <h1>Gestione utenti</h1>
-      <p>
-        Mini app con registrazione, login, logout, lista utenti e dettaglio utente.
-      </p>
+      <h1>{t("home.title")}</h1>
+      <p>{t("home.description")}</p>
       {sessionState.value ? (
         <a class="button" href="/users">
-          Vai alla lista utenti
+          {t("home.gotoUsers")}
         </a>
       ) : (
         <div class="actions">
           <a class="button" href="/register">
-            Crea account
+            {t("home.createAccount")}
           </a>
           <a class="button ghost" href="/login">
-            Accedi
+            {t("home.signIn")}
           </a>
         </div>
       )}
@@ -344,7 +636,7 @@ function RegisterPage() {
 
       sessionState.value = session;
       await fetchUsers();
-      setNotice("Registrazione completata e login effettuato");
+      setNotice(t("notice.registerSuccess"));
       route("/users");
     } catch (error) {
       setError(errorMessage(error));
@@ -355,9 +647,9 @@ function RegisterPage() {
 
   return (
     <form class="panel form" onSubmit={onSubmit}>
-      <h2>Registrazione</h2>
+      <h2>{t("register.title")}</h2>
       <label>
-        Username
+        {t("field.username")}
         <input
           value={username}
           onInput={(event) => setUsername((event.target as HTMLInputElement).value)}
@@ -365,7 +657,7 @@ function RegisterPage() {
         />
       </label>
       <label>
-        Email
+        {t("field.email")}
         <input
           type="email"
           value={email}
@@ -374,7 +666,7 @@ function RegisterPage() {
         />
       </label>
       <label>
-        Password
+        {t("field.password")}
         <input
           type="password"
           value={password}
@@ -383,7 +675,7 @@ function RegisterPage() {
         />
       </label>
       <button class="button" type="submit" disabled={pendingState.value}>
-        {pendingState.value ? "Invio..." : "Registrati"}
+        {pendingState.value ? t("register.submitLoading") : t("register.submit")}
       </button>
     </form>
   );
@@ -407,7 +699,7 @@ function LoginPage() {
       });
       sessionState.value = session;
       await fetchUsers();
-      setNotice("Accesso effettuato");
+      setNotice(t("notice.loginSuccess"));
       route("/users");
     } catch (error) {
       setError(errorMessage(error));
@@ -418,9 +710,9 @@ function LoginPage() {
 
   return (
     <form class="panel form" onSubmit={onSubmit}>
-      <h2>Login</h2>
+      <h2>{t("login.title")}</h2>
       <label>
-        Username o email
+        {t("field.usernameOrEmail")}
         <input
           value={username}
           onInput={(event) => setUsername((event.target as HTMLInputElement).value)}
@@ -428,7 +720,7 @@ function LoginPage() {
         />
       </label>
       <label>
-        Password
+        {t("field.password")}
         <input
           type="password"
           value={password}
@@ -437,7 +729,7 @@ function LoginPage() {
         />
       </label>
       <button class="button" type="submit" disabled={pendingState.value}>
-        {pendingState.value ? "Invio..." : "Accedi"}
+        {pendingState.value ? t("login.submitLoading") : t("login.submit")}
       </button>
     </form>
   );
@@ -454,10 +746,10 @@ function UsersPage() {
   if (!sessionState.value) {
     return (
       <div class="panel">
-        <h2>Accesso richiesto</h2>
-        <p>Per vedere gli utenti devi prima autenticarti.</p>
+        <h2>{t("users.authRequiredTitle")}</h2>
+        <p>{t("users.authRequiredText")}</p>
         <a class="button" href="/login">
-          Vai al login
+          {t("users.goToLogin")}
         </a>
       </div>
     );
@@ -468,10 +760,10 @@ function UsersPage() {
   return (
     <div class="panel">
       <div class="row">
-        <h2>Lista utenti</h2>
+        <h2>{t("users.title")}</h2>
         <div class="rowactions">
           <label class="limitcontrol">
-            Ordina per
+            {t("users.sortBy")}
             <select
               value={usersPage.sortBy}
               onChange={(event) => {
@@ -481,15 +773,15 @@ function UsersPage() {
                 );
               }}
             >
-              <option value="date_created">Data creazione</option>
-              <option value="username">Username</option>
-              <option value="email">Email</option>
-              <option value="role">Ruolo</option>
-              <option value="is_active">Stato attivo</option>
+              <option value="date_created">{t("users.sortBy.date_created")}</option>
+              <option value="username">{t("users.sortBy.username")}</option>
+              <option value="email">{t("users.sortBy.email")}</option>
+              <option value="role">{t("users.sortBy.role")}</option>
+              <option value="is_active">{t("users.sortBy.is_active")}</option>
             </select>
           </label>
           <label class="limitcontrol">
-            Direzione
+            {t("users.direction")}
             <select
               value={usersPage.sortDir}
               onChange={(event) => {
@@ -499,8 +791,8 @@ function UsersPage() {
                 );
               }}
             >
-              <option value="desc">Discendente</option>
-              <option value="asc">Ascendente</option>
+              <option value="desc">{t("users.direction.desc")}</option>
+              <option value="asc">{t("users.direction.asc")}</option>
             </select>
           </label>
           <button
@@ -515,24 +807,27 @@ function UsersPage() {
               ).catch((error) => setError(errorMessage(error)));
             }}
           >
-            Aggiorna
+            {t("users.refresh")}
           </button>
         </div>
       </div>
       <p class="muted">
-        Pagina {usersPage.page} di {usersPage.totalPages} · Totale utenti visibili:{" "}
-        {usersPage.total}
+        {t("users.pageSummary", {
+          page: usersPage.page,
+          totalPages: usersPage.totalPages,
+          total: usersPage.total,
+        })}
       </p>
 
       {usersPage.items.length === 0 ? (
-        <p>Nessun utente disponibile per questo account.</p>
+        <p>{t("users.empty")}</p>
       ) : (
         <ul class="userlist">
           {usersPage.items.map((user) => (
             <li key={user.id ?? `${user.username}-row`} class="userrow">
               <div>
-                <strong>{user.username || "Utente senza nome"}</strong>
-                <p>{user.email || "Email non disponibile"}</p>
+                <strong>{user.username || t("users.unnamed")}</strong>
+                <p>{user.email || t("users.noEmail")}</p>
               </div>
               <button
                 type="button"
@@ -542,7 +837,7 @@ function UsersPage() {
                 }}
                 disabled={!user.id}
               >
-                Dettaglio
+                {t("users.detail")}
               </button>
             </li>
           ))}
@@ -563,7 +858,7 @@ function UsersPage() {
             ).catch((error) => setError(errorMessage(error)));
           }}
         >
-          Precedente
+          {t("users.prev")}
         </button>
         <button
           type="button"
@@ -578,10 +873,10 @@ function UsersPage() {
             ).catch((error) => setError(errorMessage(error)));
           }}
         >
-          Successiva
+          {t("users.next")}
         </button>
         <label class="limitcontrol">
-          Per pagina
+          {t("users.perPage")}
           <select
             value={String(usersPage.limit)}
             onChange={(event) => {
@@ -616,9 +911,9 @@ function UserDetailPage(props: { id?: string; params?: { id?: string } }) {
   if (!sessionState.value) {
     return (
       <div class="panel">
-        <h2>Accesso richiesto</h2>
+        <h2>{t("users.authRequiredTitle")}</h2>
         <a class="button" href="/login">
-          Vai al login
+          {t("users.goToLogin")}
         </a>
       </div>
     );
@@ -626,27 +921,27 @@ function UserDetailPage(props: { id?: string; params?: { id?: string } }) {
 
   return (
     <div class="panel">
-      <h2>Dettaglio utente</h2>
+      <h2>{t("detail.title")}</h2>
       {!detailState.value ? (
-        <p>Caricamento dettaglio...</p>
+        <p>{t("detail.loading")}</p>
       ) : (
         <dl class="details">
-          <dt>ID</dt>
+          <dt>{t("detail.id")}</dt>
           <dd>{detailState.value.id}</dd>
-          <dt>Username</dt>
+          <dt>{t("detail.username")}</dt>
           <dd>{detailState.value.username}</dd>
-          <dt>Email</dt>
+          <dt>{t("detail.email")}</dt>
           <dd>{detailState.value.email}</dd>
-          <dt>Ruolo</dt>
-          <dd>{detailState.value.role}</dd>
-          <dt>Attivo</dt>
-          <dd>{detailState.value.isActive ? "Sì" : "No"}</dd>
-          <dt>Creato il</dt>
-          <dd>{detailState.value.dateCreated || "-"}</dd>
+          <dt>{t("detail.role")}</dt>
+          <dd>{formatRole(detailState.value.role)}</dd>
+          <dt>{t("detail.active")}</dt>
+          <dd>{detailState.value.isActive ? t("detail.activeYes") : t("detail.activeNo")}</dd>
+          <dt>{t("detail.createdAt")}</dt>
+          <dd>{detailState.value.dateCreated || t("common.na")}</dd>
         </dl>
       )}
       <a class="button ghost" href="/users">
-        Torna alla lista
+        {t("detail.backToList")}
       </a>
     </div>
   );
@@ -655,9 +950,9 @@ function UserDetailPage(props: { id?: string; params?: { id?: string } }) {
 function NotFoundPage() {
   return (
     <div class="panel">
-      <h2>Pagina non trovata</h2>
+      <h2>{t("notfound.title")}</h2>
       <a class="button" href="/">
-        Torna alla home
+        {t("notfound.backHome")}
       </a>
     </div>
   );
