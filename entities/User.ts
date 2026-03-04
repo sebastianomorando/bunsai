@@ -1,6 +1,24 @@
 import { randomBytes } from "node:crypto";
 import { sql } from "bun";
 import Session from "./Session";
+import {
+  Args,
+  Body,
+  BodyField,
+  Param,
+  Query,
+  Req,
+  RequireAuth,
+  RequireOwner,
+  Route,
+  Serialize,
+} from "../server/decorators";
+import {
+  ConflictError,
+  NotAuthenticatedError,
+  NotAuthorizedError,
+  NotFoundError,
+} from "../server/errors";
 
 export type UserRole = "user" | "admin";
 
@@ -27,6 +45,63 @@ interface RegisterInput {
 interface LoginInput {
   username: string;
   password: string;
+}
+
+type PublicUser = {
+  id: string | null;
+  username: string | null;
+  email: string | null;
+  role: UserRole | null;
+  isActive: boolean | null;
+  dateCreated: Date | null;
+  dateUpdated: Date | null;
+  defaultCompanyId: string | null;
+};
+
+type PublicSession = {
+  userId: string | null;
+  expiresAt: Date | null;
+};
+
+function toPublicUser(value: unknown): PublicUser | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const row = value as Record<string, unknown>;
+  return {
+    id: (row.id as string) ?? null,
+    username: (row.username as string) ?? null,
+    email: (row.email as string) ?? null,
+    role: (row.role as UserRole) ?? null,
+    isActive: (row.isActive as boolean) ?? (row.is_active as boolean) ?? null,
+    dateCreated: (row.dateCreated as Date) ?? (row.date_created as Date) ?? null,
+    dateUpdated: (row.dateUpdated as Date) ?? (row.date_updated as Date) ?? null,
+    defaultCompanyId:
+      (row.defaultCompanyId as string) ?? (row.default_company_id as string) ?? null,
+  };
+}
+
+function serializeUserPayload(payload: unknown) {
+  if (payload === null || payload === undefined) {
+    return payload;
+  }
+  if (Array.isArray(payload)) {
+    return payload.map(toPublicUser);
+  }
+  return toPublicUser(payload);
+}
+
+function serializeSessionPayload(payload: unknown): PublicSession | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const row = payload as Record<string, unknown>;
+  return {
+    userId: (row.userId as string) ?? (row.user_id as string) ?? null,
+    expiresAt: (row.expiresAt as Date) ?? (row.expires_at as Date) ?? null,
+  };
 }
 
 class User {
@@ -57,7 +132,7 @@ class User {
   async updateUsername(newUsername: string): Promise<void> {
     const rows = await sql`SELECT id FROM users WHERE username = ${newUsername} AND id != ${this.id}`;
     if (rows.length > 0) {
-      throw new Error("Username gia in uso");
+      throw new ConflictError("Username gia in uso");
     }
 
     const now = new Date();
@@ -96,6 +171,9 @@ class User {
     return randomBytes(32).toString("hex");
   }
 
+  @Route("POST", "/api/register")
+  @Serialize(serializeUserPayload)
+  @Args(Body())
   static async register(input: RegisterInput): Promise<User> {
     const userId = Bun.randomUUIDv7();
     const companyId = Bun.randomUUIDv7();
@@ -143,25 +221,31 @@ class User {
     });
   }
 
+  @Route("POST", "/api/login")
+  @Serialize(serializeSessionPayload)
+  @Args(Body(), Req())
   static async login(input: LoginInput, req?: Bun.BunRequest): Promise<Session> {
     const rows = await sql`SELECT * FROM users WHERE username = ${input.username} OR email = ${input.username}`;
     if (rows.length === 0) {
-      throw new Error("Credenziali non valide");
+      throw new NotAuthenticatedError("Credenziali non valide");
     }
 
     const row = rows[0] as UserRecord;
     const valid = await Bun.password.verify(input.password, row.password);
     if (!valid) {
-      throw new Error("Credenziali non valide");
+      throw new NotAuthenticatedError("Credenziali non valide");
     }
 
     return Session.initNewSession(row.id, req);
   }
 
+  @Route("POST", "/api/logout")
+  @RequireAuth()
+  @Args(Req())
   static async logout(req: Bun.BunRequest): Promise<void> {
     const session = await Session.getFromRequest(req);
     if (!session) {
-      throw new Error("Sessione non trovata");
+      throw new NotAuthenticatedError("Sessione non trovata");
     }
     await session.terminate();
     req.cookies.set({
@@ -174,6 +258,11 @@ class User {
     });
   }
 
+  @Route("GET", "/api/users/:id")
+  @RequireAuth()
+  @RequireOwner("id")
+  @Serialize(serializeUserPayload)
+  @Args(Param("id"))
   static async getById(id: string): Promise<User | null> {
     const rows = await sql`SELECT * FROM users WHERE id = ${id}`;
     if (rows.length === 0) {
@@ -188,6 +277,18 @@ class User {
     });
   }
 
+  @Route("GET", "/api/users/by-identifier")
+  @RequireAuth()
+  @RequireOwner({
+    resolve: async (req) => {
+      const identifier = new URL(req.url).searchParams.get("identifier");
+      if (!identifier) return undefined;
+      const user = await User.getByUsernameOrEmail(identifier);
+      return user?.id;
+    },
+  })
+  @Serialize(serializeUserPayload)
+  @Args(Query("identifier"))
   static async getByUsernameOrEmail(identifier: string): Promise<User | null> {
     const rows = await sql`SELECT * FROM users WHERE username = ${identifier} OR email = ${identifier}`;
     if (rows.length === 0) {
@@ -202,6 +303,18 @@ class User {
     });
   }
 
+  @Route("GET", "/api/users/by-token")
+  @RequireAuth()
+  @RequireOwner({
+    resolve: async (req) => {
+      const apiToken = new URL(req.url).searchParams.get("apiToken");
+      if (!apiToken) return undefined;
+      const user = await User.getUserByApiToken(apiToken);
+      return user?.id;
+    },
+  })
+  @Serialize(serializeUserPayload)
+  @Args(Query("apiToken"))
   static async getUserByApiToken(apiToken: string): Promise<User | null> {
     const rows = await sql`SELECT * FROM users WHERE api_token = ${apiToken}`;
     if (rows.length === 0) {
@@ -216,10 +329,12 @@ class User {
     });
   }
 
+  @Route("POST", "/api/password-reset/request")
+  @Args(BodyField("email"))
   static async requestPasswordReset(email: string): Promise<string> {
     const rows = await sql`SELECT id FROM users WHERE email = ${email}`;
     if (rows.length === 0) {
-      throw new Error("Utente non trovato");
+      throw new NotFoundError("Utente non trovato");
     }
 
     const token = Bun.randomUUIDv7();
@@ -234,10 +349,12 @@ class User {
     return token;
   }
 
+  @Route("POST", "/api/password-reset")
+  @Args(BodyField("token"), BodyField("newPassword"))
   static async resetPassword(token: string, newPassword: string): Promise<void> {
     const rows = await sql`SELECT * FROM password_resets WHERE token = ${token}`;
     if (rows.length === 0) {
-      throw new Error("Token non valido o scaduto");
+      throw new NotAuthorizedError("Token non valido o scaduto");
     }
 
     const reset = rows[0] as {
@@ -247,7 +364,7 @@ class User {
     };
 
     if (new Date(reset.expires_at).getTime() < Date.now()) {
-      throw new Error("Token non valido o scaduto");
+      throw new NotAuthorizedError("Token non valido o scaduto");
     }
 
     const passwordHash = await Bun.password.hash(newPassword);
