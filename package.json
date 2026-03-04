@@ -1,8 +1,51 @@
 {
   "name": "bunsai",
+  "version": "0.1.0",
+  "description": "Thin full-stack Bun starter: backend, frontend (Preact), auth, migrations and CLI.",
   "module": "index.ts",
   "type": "module",
-  "private": true,
+  "packageManager": "bun@1.3.10",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sebastianomorando/bunsai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sebastianomorando/bunsai/issues"
+  },
+  "homepage": "https://github.com/sebastianomorando/bunsai#readme",
+  "keywords": [
+    "bun",
+    "typescript",
+    "fullstack",
+    "preact",
+    "signals",
+    "preact-iso",
+    "template",
+    "starter",
+    "decorators",
+    "auth"
+  ],
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "license": "MIT",
+  "scripts": {
+    "dev": "bun run --watch index.ts",
+    "start": "bun run index.ts",
+    "migrate": "bun run migrate.ts",
+    "seed": "bun run seed.ts",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "bun test",
+    "test:decorators": "bun test server/decorators.test.ts"
+  },
+  "bun-create": {
+    "preinstall": "echo \"Initializing Bunsai template...\"",
+    "postinstall": [
+      "echo \"Project created successfully.\"",
+      "echo \"Next steps: cp .env.example .env && bun run migrate && bun run dev\""
+    ],
+    "start": "bun run dev"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
