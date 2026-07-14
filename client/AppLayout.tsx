@@ -8,6 +8,7 @@ import { NotFoundPage } from "./pages/NotFoundPage.tsx";
 import { UserDetailPage } from "./pages/UserDetailPage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
 import { AssetsPage } from "./pages/AssetsPage.tsx";
+import { ProfilePage } from "./pages/ProfilePage.tsx";
 import {
   errorMessage,
   errorState,
@@ -83,6 +84,7 @@ export function AppLayout() {
             <>
               <a href="/users">{t("nav.users")}</a>
               <a href="/assets">{t("nav.assets")}</a>
+              <a href="/profile">{t("nav.profile")}</a>
               <button type="button" class="linklike" onClick={onLogout}>
                 {t("nav.logout")}
               </button>
@@ -102,6 +104,7 @@ export function AppLayout() {
           <Route path="/users" component={UsersPage} />
           <Route path="/users/:id" component={UserDetailPage} />
           <Route path="/assets" component={AssetsPage} />
+          <Route path="/profile" component={ProfilePage} />
           <Route path="*" component={NotFoundPage} />
         </Router>
       </section>

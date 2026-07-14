@@ -5,6 +5,7 @@ import {
   pendingState,
   sessionState,
   usersState,
+  profileState,
   assetsState,
 } from "./state.ts";
 import {
@@ -19,6 +20,7 @@ import {
   type UserSortBy,
   type Asset,
   type AssetList,
+  type UpdateProfileInput,
 } from "./types.ts";
 
 const apiCodeTranslations = {
@@ -177,20 +179,42 @@ function normalizePaginatedUsers(payload: PaginatedUsers | PublicUser[]): Pagina
 
 export async function bootstrapFromCookie() {
   try {
-    const payload = await apiRequest<PaginatedUsers | PublicUser[]>(
-      usersEndpoint(1, DEFAULT_USERS_LIMIT, DEFAULT_USERS_SORT_BY, DEFAULT_USERS_SORT_DIR)
-    );
-    const users = normalizePaginatedUsers(payload);
-    usersState.value = users;
-    const first = users.items[0];
+    const profile = await apiRequest<PublicUser>("/api/profile");
+    profileState.value = profile;
     sessionState.value = {
-      userId: first?.id ?? "authenticated",
+      userId: profile.id ?? "authenticated",
       expiresAt: null,
     };
   } catch {
     sessionState.value = null;
     usersState.value = emptyUsersPage();
     detailState.value = null;
+    profileState.value = null;
+  }
+}
+
+export async function fetchProfile() {
+  pendingState.value = true;
+  try {
+    const profile = await apiRequest<PublicUser>("/api/profile");
+    profileState.value = profile;
+    return profile;
+  } finally {
+    pendingState.value = false;
+  }
+}
+
+export async function updateProfile(input: UpdateProfileInput) {
+  pendingState.value = true;
+  try {
+    const profile = await apiRequest<PublicUser>("/api/profile", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    profileState.value = profile;
+    return profile;
+  } finally {
+    pendingState.value = false;
   }
 }
 

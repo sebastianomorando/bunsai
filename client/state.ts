@@ -13,6 +13,7 @@ import {
 export const sessionState = signal<SessionInfo | null>(null);
 export const usersState = signal<PaginatedUsers>(emptyUsersPage());
 export const detailState = signal<PublicUser | null>(null);
+export const profileState = signal<PublicUser | null>(null);
 export const pendingState = signal(false);
 export const noticeState = signal<string | null>(null);
 export const errorState = signal<string | null>(null);
@@ -33,6 +34,7 @@ export function emptyUsersPage(): PaginatedUsers {
 export function resetUsersState() {
   usersState.value = emptyUsersPage();
   detailState.value = null;
+  profileState.value = null;
 }
 
 export function resetAssetsState() {

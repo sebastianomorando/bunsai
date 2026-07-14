@@ -12,6 +12,8 @@ export type PublicUser = {
   dateCreated: string | null;
   dateUpdated: string | null;
   defaultCompanyId: string | null;
+  profileAssetId: string | null;
+  profileImageUrl: string | null;
 };
 
 export type UserSortBy = "date_created" | "username" | "email" | "role" | "is_active";
@@ -54,6 +56,14 @@ export type Asset = {
 };
 
 export type AssetList = { items: Asset[] };
+
+export type UpdateProfileInput = {
+  username: string;
+  email: string;
+  currentPassword?: string;
+  newPassword?: string;
+  profileAssetId?: string | null;
+};
 
 export const DEFAULT_USERS_LIMIT = 10;
 export const DEFAULT_USERS_SORT_BY: UserSortBy = "date_created";

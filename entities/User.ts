@@ -18,6 +18,7 @@ import {
   NotAuthenticatedError,
   NotAuthorizedError,
   NotFoundError,
+  ValidationError,
 } from "../server/errors";
 
 export type UserRole = "user" | "admin";
@@ -34,6 +35,7 @@ export interface UserRecord {
   activation_token: string | null;
   api_token: string | null;
   default_company_id?: string | null;
+  profile_asset_id?: string | null;
 }
 
 interface RegisterInput {
@@ -47,6 +49,14 @@ interface LoginInput {
   password: string;
 }
 
+interface UpdateProfileInput {
+  username?: string;
+  email?: string;
+  currentPassword?: string;
+  newPassword?: string;
+  profileAssetId?: string | null;
+}
+
 type PublicUser = {
   id: string | null;
   username: string | null;
@@ -56,6 +66,8 @@ type PublicUser = {
   dateCreated: Date | null;
   dateUpdated: Date | null;
   defaultCompanyId: string | null;
+  profileAssetId: string | null;
+  profileImageUrl: string | null;
 };
 
 type PublicSession = {
@@ -98,6 +110,12 @@ function toPublicUser(value: unknown): PublicUser | null {
     dateUpdated: (row.dateUpdated as Date) ?? (row.date_updated as Date) ?? null,
     defaultCompanyId:
       (row.defaultCompanyId as string) ?? (row.default_company_id as string) ?? null,
+    profileAssetId:
+      (row.profileAssetId as string) ?? (row.profile_asset_id as string) ?? null,
+    profileImageUrl:
+      ((row.profileAssetId as string) ?? (row.profile_asset_id as string))
+        ? `/assets/${(row.profileAssetId as string) ?? (row.profile_asset_id as string)}?width=256&height=256&fit=fill&format=webp`
+        : null,
   };
 }
 
@@ -217,6 +235,7 @@ class User {
   isActive: boolean;
   activationToken: string | null;
   apiToken: string | null;
+  profileAssetId: string | null;
 
   constructor(record: UserRecord) {
     this.id = record.id;
@@ -229,6 +248,7 @@ class User {
     this.isActive = record.is_active;
     this.activationToken = record.activation_token;
     this.apiToken = record.api_token;
+    this.profileAssetId = record.profile_asset_id ?? null;
   }
 
   async updateUsername(newUsername: string): Promise<void> {
@@ -271,6 +291,69 @@ class User {
 
   static generateApiToken(): string {
     return randomBytes(32).toString("hex");
+  }
+
+  @Route("GET", "/api/profile")
+  @RequireAuth()
+  @Serialize(serializeUserPayload)
+  @Args(Req())
+  static async profile(req: Bun.BunRequest): Promise<User> {
+    const session = await Session.getFromRequest(req);
+    if (!session) throw new NotAuthenticatedError("Sessione non trovata");
+    const user = await User.getById(session.userId);
+    if (!user) throw new NotFoundError("Utente non trovato");
+    return user;
+  }
+
+  @Route("PATCH", "/api/profile")
+  @RequireAuth()
+  @Serialize(serializeUserPayload)
+  @Args(Body(), Req())
+  static async updateProfile(input: UpdateProfileInput, req: Bun.BunRequest): Promise<User> {
+    if (!input || typeof input !== "object") throw new ValidationError("Dati profilo non validi");
+    const session = await Session.getFromRequest(req);
+    if (!session) throw new NotAuthenticatedError("Sessione non trovata");
+    const user = await User.getById(session.userId);
+    if (!user) throw new NotFoundError("Utente non trovato");
+
+    const username = input.username?.trim();
+    const email = input.email?.trim().toLowerCase();
+    if (username !== undefined && (username.length < 3 || username.length > 255)) {
+      throw new ValidationError("Lo username deve contenere da 3 a 255 caratteri");
+    }
+    if (email !== undefined && (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+      throw new ValidationError("Email non valida");
+    }
+    if (username && username !== user.username) {
+      const rows = await sql`SELECT id FROM users WHERE username = ${username} AND id != ${user.id}`;
+      if (rows.length) throw new ConflictError("Username gia in uso");
+    }
+    if (email && email !== user.email) {
+      const rows = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${user.id}`;
+      if (rows.length) throw new ConflictError("Email gia in uso");
+    }
+
+    if (input.newPassword) {
+      if (input.newPassword.length < 8) throw new ValidationError("La password deve contenere almeno 8 caratteri");
+      if (!input.currentPassword || !await user.verifyPassword(input.currentPassword)) {
+        throw new NotAuthenticatedError("Password corrente non valida");
+      }
+    }
+
+    if (input.profileAssetId) {
+      const assets = await sql`SELECT id FROM assets WHERE id = ${input.profileAssetId} AND uploaded_by = ${user.id} AND image_format IS NOT NULL`;
+      if (!assets.length) throw new NotFoundError("Foto profilo non valida");
+    }
+
+    const now = new Date();
+    const nextUsername = username || user.username;
+    const nextEmail = email || user.email;
+    const nextProfileAssetId = input.profileAssetId === undefined ? user.profileAssetId : input.profileAssetId;
+    await sql`UPDATE users SET username = ${nextUsername}, email = ${nextEmail}, profile_asset_id = ${nextProfileAssetId}, date_updated = ${now} WHERE id = ${user.id}`;
+    if (input.newPassword) await user.updatePassword(input.newPassword);
+    const updated = await User.getById(user.id);
+    if (!updated) throw new NotFoundError("Utente non trovato");
+    return updated;
   }
 
   @Route("POST", "/api/register")
