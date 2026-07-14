@@ -167,6 +167,30 @@ curl -i -b cookie.txt http://localhost:3000/api/users/<user-id>
 curl -i -b cookie.txt -X POST http://localhost:3000/api/logout
 ```
 
+## Asset API
+
+Assets are stored outside the database (under `data/assets` by default), while metadata lives in PostgreSQL. Upload, listing, metadata and deletion require authentication; the asset URL itself is public.
+
+```bash
+# Upload
+curl -b cookie.txt -F 'file=@photo.jpg' -F 'title=Hero' \
+  http://localhost:3000/api/assets
+
+# Original
+curl http://localhost:3000/assets/<asset-id> -o photo.jpg
+
+# On-demand transform (generated once, then served from the disk cache)
+curl 'http://localhost:3000/assets/<asset-id>?width=800&height=600&fit=inside&format=webp&quality=80' \
+  -o photo.webp
+
+# Built-in preset
+curl 'http://localhost:3000/assets/<asset-id>?key=system-medium-contain' -o thumbnail
+```
+
+Supported query parameters are `width`, `height`, `quality`, `format` (`auto`, `jpg`, `png`, `webp`), `fit` (`inside`, `contain`, `fill`), `withoutEnlargement`, `rotate`, `flip`, `flop`, `brightness`, and `saturation`. Geometry is intentionally limited to Bun's native `fill` and `inside` modes; true crop/letterbox modes are not emulated with another image library.
+
+Optional environment variables: `ASSETS_DIR`, `ASSET_CACHE_DIR`, `MAX_ASSET_BYTES`, `MAX_IMAGE_PIXELS`, and `MAX_TRANSFORM_DIMENSION`.
+
 `GET /api/users` supports pagination and ordering:
 - `page`, `limit` (default `1`/`10`, max `100`)
 - `sortBy`: `date_created`, `username`, `email`, `role`, `is_active`
