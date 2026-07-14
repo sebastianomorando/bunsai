@@ -7,12 +7,14 @@ import { HomePage } from "./pages/HomePage.tsx";
 import { NotFoundPage } from "./pages/NotFoundPage.tsx";
 import { UserDetailPage } from "./pages/UserDetailPage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
+import { AssetsPage } from "./pages/AssetsPage.tsx";
 import {
   errorMessage,
   errorState,
   noticeState,
   pendingState,
   resetUsersState,
+  resetAssetsState,
   sessionState,
   setError,
   setNotice,
@@ -40,6 +42,7 @@ export function AppLayout() {
       await apiRequest("/api/logout", { method: "POST" });
       sessionState.value = null;
       resetUsersState();
+      resetAssetsState();
       setNotice(t("notice.logoutSuccess"));
       route("/login");
     } catch (error) {
@@ -79,6 +82,7 @@ export function AppLayout() {
           ) : (
             <>
               <a href="/users">{t("nav.users")}</a>
+              <a href="/assets">{t("nav.assets")}</a>
               <button type="button" class="linklike" onClick={onLogout}>
                 {t("nav.logout")}
               </button>
@@ -97,6 +101,7 @@ export function AppLayout() {
           <Route path="/login" component={LoginPage} />
           <Route path="/users" component={UsersPage} />
           <Route path="/users/:id" component={UserDetailPage} />
+          <Route path="/assets" component={AssetsPage} />
           <Route path="*" component={NotFoundPage} />
         </Router>
       </section>

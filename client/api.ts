@@ -5,6 +5,7 @@ import {
   pendingState,
   sessionState,
   usersState,
+  assetsState,
 } from "./state.ts";
 import {
   DEFAULT_USERS_LIMIT,
@@ -16,6 +17,8 @@ import {
   type PublicUser,
   type SortDirection,
   type UserSortBy,
+  type Asset,
+  type AssetList,
 } from "./types.ts";
 
 const apiCodeTranslations = {
@@ -49,7 +52,7 @@ function localizedApiErrorMessage(
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) {
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -80,6 +83,41 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   }
 
   return payload as T;
+}
+
+export async function fetchAssets() {
+  pendingState.value = true;
+  try {
+    const payload = await apiRequest<AssetList>("/api/assets");
+    assetsState.value = Array.isArray(payload.items) ? payload.items : [];
+    return assetsState.value;
+  } finally {
+    pendingState.value = false;
+  }
+}
+
+export async function uploadAsset(file: File, title?: string) {
+  pendingState.value = true;
+  try {
+    const form = new FormData();
+    form.set("file", file);
+    if (title?.trim()) form.set("title", title.trim());
+    const asset = await apiRequest<Asset>("/api/assets", { method: "POST", body: form });
+    assetsState.value = [asset, ...assetsState.value];
+    return asset;
+  } finally {
+    pendingState.value = false;
+  }
+}
+
+export async function deleteAsset(id: string) {
+  pendingState.value = true;
+  try {
+    await apiRequest<void>(`/api/assets/${encodeURIComponent(id)}`, { method: "DELETE" });
+    assetsState.value = assetsState.value.filter((asset) => asset.id !== id);
+  } finally {
+    pendingState.value = false;
+  }
 }
 
 function usersEndpoint(

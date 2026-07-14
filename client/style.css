@@ -173,6 +173,138 @@ body {
   border-color: var(--line);
 }
 
+.button.danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: #d9a1a1;
+}
+
+.asset-page {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.asset-upload {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.asset-upload-form {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.asset-upload-form label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.asset-upload-form input {
+  width: 100%;
+  padding: 0.58rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.62rem;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.asset-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.asset-list-heading h3 {
+  margin: 0;
+}
+
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.asset-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: var(--paper);
+  box-shadow: 0 6px 18px rgba(33, 24, 15, 0.06);
+}
+
+.asset-preview {
+  display: grid;
+  place-items: center;
+  height: 170px;
+  background-color: #ece8de;
+  background-image: linear-gradient(45deg, #dfd9ce 25%, transparent 25%), linear-gradient(-45deg, #dfd9ce 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #dfd9ce 75%), linear-gradient(-45deg, transparent 75%, #dfd9ce 75%);
+  background-size: 18px 18px;
+  background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.asset-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.asset-file-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 86px;
+  padding: 0.4rem;
+  border-radius: 0.45rem 0.9rem 0.45rem 0.45rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.asset-info {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem;
+}
+
+.asset-info strong,
+.asset-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-info span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.asset-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.asset-actions .button {
+  padding-inline: 0.45rem;
+  font-size: 0.85rem;
+}
+
+.asset-empty {
+  text-align: center;
+}
+
 .form {
   display: grid;
   gap: 0.78rem;
@@ -343,6 +475,15 @@ body {
   }
 
   .pagination .button {
+    width: auto;
+  }
+
+  .asset-upload {
+    grid-template-columns: 1fr;
+  }
+
+  .asset-actions .button,
+  .asset-list-heading .button {
     width: auto;
   }
 }

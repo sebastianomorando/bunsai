@@ -7,6 +7,7 @@ import {
   type PaginatedUsers,
   type PublicUser,
   type SessionInfo,
+  type Asset,
 } from "./types.ts";
 
 export const sessionState = signal<SessionInfo | null>(null);
@@ -15,6 +16,7 @@ export const detailState = signal<PublicUser | null>(null);
 export const pendingState = signal(false);
 export const noticeState = signal<string | null>(null);
 export const errorState = signal<string | null>(null);
+export const assetsState = signal<Asset[]>([]);
 
 export function emptyUsersPage(): PaginatedUsers {
   return {
@@ -31,6 +33,10 @@ export function emptyUsersPage(): PaginatedUsers {
 export function resetUsersState() {
   usersState.value = emptyUsersPage();
   detailState.value = null;
+}
+
+export function resetAssetsState() {
+  assetsState.value = [];
 }
 
 export function setNotice(message: string | null) {

@@ -38,6 +38,23 @@ export type ApiClientError = Error & {
   code?: string;
 };
 
+export type Asset = {
+  id: string;
+  filename: string;
+  title: string | null;
+  mimeType: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  format: string | null;
+  uploadedBy: string;
+  dateCreated: string;
+  dateUpdated: string | null;
+  url: string;
+};
+
+export type AssetList = { items: Asset[] };
+
 export const DEFAULT_USERS_LIMIT = 10;
 export const DEFAULT_USERS_SORT_BY: UserSortBy = "date_created";
 export const DEFAULT_USERS_SORT_DIR: SortDirection = "desc";
