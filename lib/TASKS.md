@@ -241,41 +241,7 @@ app.get("/users/:id/posts/:postId", (req: BunRequest<"/users/:id/posts/:postId">
 
 ### 6. Cache Control for Static Files
 
-**Goal**: Add cache headers to static file responses.
-
-**Implementation**:
-```typescript
-interface StaticOptions {
-    maxAge?: number;
-    immutable?: boolean;
-    cacheControl?: string;
-}
-
-async static(path: string, pattern: string, options: StaticOptions = {}) {
-    const glob = new Bun.Glob(pattern);
-    const cacheHeader = options.cacheControl || 
-        `max-age=${options.maxAge || 3600}${options.immutable ? ', immutable' : ''}`;
-    
-    for await (const file of glob.scan(".")) {
-        const response = new Response(Bun.file(file), {
-            headers: {
-                "Cache-Control": cacheHeader
-            }
-        });
-        this.routes[`${path}/${file}`] = response;
-    }
-}
-
-// Usage
-await app.static("/public", "public/**/*", { maxAge: 86400, immutable: true });
-```
-
-**Benefits**:
-- Better performance
-- Reduced server load
-- Production-ready static serving
-
-**Testing**: Verify cache headers are set correctly
+**Decision**: Do not add a Bunsai-specific cache API. `static()` passes Bun's native directory route configuration directly to `Bun.serve()`, which already handles ETag, Last-Modified, conditional requests, and range requests. Applications that require custom `Cache-Control` headers should use explicit file routes or an upstream proxy.
 
 ---
 

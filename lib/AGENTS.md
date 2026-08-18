@@ -47,7 +47,7 @@ It provides:
    - Calling `next()` multiple times throws error
 
 5. **Static Files & Build**
-   - `static(path, baseFolder, glob)`: Uses `Bun.Glob` to scan baseFolder and register file routes at a URL path
+   - `static(path, route)`: Passes Bun's native `{ dir, statCache? }` directory route to `Bun.serve()`
    - `build(entrypoint, options)`: Bundles with `Bun.build()` and serves
    - Build artifacts stored in `artifacts` map
 

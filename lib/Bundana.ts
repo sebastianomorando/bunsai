@@ -1,5 +1,4 @@
 import type { ErrorLike } from "bun";
-import { watch } from "fs";
 
 export type HttpMethod = "GET" | "POST" | "DELETE" | "PATCH" | "PUT" | "OPTIONS";
 
@@ -21,6 +20,16 @@ export type Route = {
     middlewares?: Middleware<any>[];
 };
 
+export type DirectoryRoute = {
+    dir: string;
+    statCache?: boolean;
+};
+
+type Routes<WebSocketData> = Record<
+    string,
+    Bun.Serve.Routes<WebSocketData, string>[string] | DirectoryRoute
+>;
+
 /**
  * Bundana — a lightweight express-style layer for Bun's HTTP server
  * @template WebSocketData The type of data associated with WebSocket connections
@@ -34,7 +43,7 @@ type ListenOptions<WebSocketData> = Omit<
 };
 
 export class Bundana<WebSocketData> {
-    routes: Bun.Serve.Routes<WebSocketData, string>;
+    routes: Routes<WebSocketData>;
     port = Number(process.env.PORT) || 3000;
     server: Bun.Server<WebSocketData> | null = null;
     // options: Bun.Serve.Options<WebSocketData, string>;
@@ -48,23 +57,18 @@ export class Bundana<WebSocketData> {
     }
 
     /**
-     * Serve static files from a glob pattern
-     * @param path The base path to serve the files from
-     * @param baseFolder The base folder to serve the files from
-     * @param globPattern A valid glob pattern
+     * Serve a directory using Bun's native directory routes.
+     * @param path The route path, ending in `/*`
+     * @param route Bun's directory route configuration
      */
-    async static(path: string = "", baseFolder: string = "public", globPattern: string = "**/*") {
-        const glob = new Bun.Glob(globPattern);
-        for await (const file of glob.scan(baseFolder)) {
-            // console.log(`${path}/${file}`, `${baseFolder}/${file}`);
-            if (file === "index.html") {
-                this.get(`${path}/`, (req, server) => new Response(Bun.file(`./${baseFolder}/${file}`)));
-            }
-            this.get(`${path}/${file}`, (req, server) => new Response(Bun.file(`./${baseFolder}/${file}`)));
+    static(path: `${string}/*`, route: DirectoryRoute): void {
+        this.routes[path] = route;
+
+        if (this.server) {
+            this.server.reload({
+                routes: this.routes as Bun.Serve.Routes<WebSocketData, string>
+            });
         }
-        watch(baseFolder, { recursive: true }, async (eventType, filename) => {
-            this.get(`${path}/${filename}`, (req, server) => new Response(Bun.file(`./${baseFolder}/${filename}`)));
-        });
     }
 
     bundle(path: string, entryPoint: Bun.HTMLBundle) {
@@ -171,7 +175,7 @@ export class Bundana<WebSocketData> {
 
         if (this.server) {
             this.server.reload({
-                routes: this.routes
+                routes: this.routes as Bun.Serve.Routes<WebSocketData, string>
             });
         }
     }

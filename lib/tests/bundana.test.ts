@@ -339,49 +339,28 @@ describe("Bundana", () => {
     });
 
     describe("Static Files", () => {
-        it("should serve static files from base folder with glob pattern", async () => {
-            // Create a temporary test file
-            const testDir = join(import.meta.dir, "temp");
-            await mkdir(testDir, { recursive: true });
-            const testFile = join(testDir, "test.txt");
-            await writeFile(testFile, "Test content");
+        it("should register Bun's native directory route unchanged", () => {
+            const route = {
+                dir: "lib/tests/fixtures/public",
+                statCache: false
+            };
 
-            try {
-                await app.static("/static", "lib/tests/temp", "*.txt");
-                startServer();
+            app.static("/static/*", route);
 
-                const res = await fetch(
-                    `http://localhost:${port}/static/test.txt`
-                );
-                expect(res.status).toBe(200);
-                expect(await res.text()).toBe("Test content");
-            } finally {
-                await rm(testDir, { recursive: true, force: true });
-            }
+            expect(app.routes["/static/*"]).toBe(route);
         });
 
-        it("should serve multiple static files", async () => {
-            const testDir = join(import.meta.dir, "temp");
-            await mkdir(testDir, { recursive: true });
-            await writeFile(join(testDir, "file1.txt"), "Content 1");
-            await writeFile(join(testDir, "file2.txt"), "Content 2");
+        it("should reload native directory routes after the server starts", () => {
+            let reloadedRoutes: unknown;
+            app.server = {
+                reload: ({ routes }: { routes: unknown }) => {
+                    reloadedRoutes = routes;
+                }
+            } as unknown as Bun.Server<any>;
 
-            try {
-                await app.static("/static", "lib/tests/temp", "*.txt");
-                startServer();
+            app.static("/assets/*", { dir: "assets" });
 
-                const res1 = await fetch(
-                    `http://localhost:${port}/static/file1.txt`
-                );
-                expect(await res1.text()).toBe("Content 1");
-
-                const res2 = await fetch(
-                    `http://localhost:${port}/static/file2.txt`
-                );
-                expect(await res2.text()).toBe("Content 2");
-            } finally {
-                await rm(testDir, { recursive: true, force: true });
-            }
+            expect(reloadedRoutes).toBe(app.routes);
         });
     });
 

@@ -7,7 +7,7 @@ Bundana 🧣 — a lightweight express-style layer for Bun
 - 🚀 **Bun-native**: Built on top of `Bun.serve()` with native route support
 - 🛤️ **Express-like API**: Familiar `get()`, `post()`, `patch()`, `delete()` methods
 - 🔌 **Middleware support**: Global and per-route middleware with `next()` composition
-- 📦 **Static file serving**: Serve files from glob patterns
+- 📦 **Static file serving**: Pass native directory routes to `Bun.serve()`
 - ⚡ **Built-in bundler**: Bundle and serve JavaScript/TypeScript with `build()`
 - 🔌 **WebSocket support**: First-class WebSocket handler integration
 - 🔥 **Hot reload**: Add routes dynamically after server start
@@ -203,14 +203,11 @@ app.listen();
 ```typescript
 const app = new Bundana();
 
-// Serve all files from public directory at /static path
-await app.static("/static", "public");
+// Bun directory routes use a wildcard path and a native route config
+app.static("/static/*", { dir: "./public" });
 
-// Serve specific file types from assets directory at /assets path
-await app.static("/assets", "assets", "*.{css,js,png,jpg}");
-
-// Use default public folder with custom glob pattern
-await app.static("/files", "public", "**/*.pdf");
+// Disable Bun's per-path stat cache when desired
+app.static("/assets/*", { dir: "./assets", statCache: false });
 
 app.listen();
 ```
@@ -389,24 +386,20 @@ type Middleware<T> = (
 
 ### Static Files & Bundling
 
-#### `static(path, baseFolder, globPattern)`
+#### `static(path, route)`
 
-Serve static files from a base folder matching a glob pattern at a URL path.
+Register a [native Bun directory route](https://bun.com/docs/runtime/http/routing#directory-routes). Bunsai passes the route configuration directly to `Bun.serve()` without scanning or watching the directory itself.
 
 **Parameters:**
-- `path` (optional): The URL path prefix to serve files from (e.g., `/static`). Default: `""`
-- `baseFolder` (optional): The folder to scan for files. Default: `"public"`
-- `globPattern` (optional): A glob pattern to match files within baseFolder. Default: `"**/*"`
+- `path`: The Bun route path. It must end in `/*` (for example, `/static/*`).
+- `route`: The native directory route configuration: `{ dir: string, statCache?: boolean }`.
 
 ```typescript
 // Serve all files from public directory at /static path
-await app.static("/static", "public");
+app.static("/static/*", { dir: "./public" });
 
-// Serve specific file types from assets directory
-await app.static("/assets", "assets", "*.{html,css,js}");
-
-// Use defaults - serves public/**/* at root
-await app.static();
+// Serve public at the URL root and disable the stat cache
+app.static("/*", { dir: "./public", statCache: false });
 ```
 
 #### `build(entrypoint, options?)`
@@ -575,7 +568,7 @@ All tests use Bun's built-in test runner (`bun:test`) and spin up ephemeral serv
 
 - Bundana is a thin wrapper around `Bun.serve()` with minimal overhead
 - Middleware composition happens once at route registration, not per-request
-- Static file serving uses `Bun.file()` for optimal performance
+- Static file serving uses Bun's native directory routes
 - WebSocket support leverages Bun's native pub/sub system
 
 ## Limitations

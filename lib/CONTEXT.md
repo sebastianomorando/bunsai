@@ -13,7 +13,7 @@ This document explains the design philosophy, key decisions, and known limitatio
 **Implementation**:
 - Routes stored as `{ "/path": { GET: handler } }` - directly compatible with Bun.serve()
 - WebSocket handler passed directly to Bun.serve()
-- Static files served via `Bun.file()` for optimal performance
+- Static directories served via Bun's native directory routes
 - Build uses `Bun.build()` natively
 
 ### 2. Minimal Overhead
@@ -200,23 +200,15 @@ For a route WITHOUT per-route middleware:
 
 ### Static File Serving
 
-Uses `Bun.Glob` to match files from a base folder:
+Uses Bun's native directory routes directly:
 ```typescript
-async static(path: string = "", baseFolder: string = "public", globPattern: string = "**/*") {
-    const glob = new Bun.Glob(globPattern);
-    for await (const file of glob.scan(baseFolder)) {
-        this.get(`${path}/${file}`, (req, server) => new Response(Bun.file(`./${baseFolder}/${file}`)));
-    }
-    // Also watches for new files added to baseFolder
-}
+app.static("/static/*", { dir: "./public" });
 ```
 
 **Features**: 
-- Scans specific base folder instead of current directory
-- Watches for file changes and automatically registers new routes
-- Supports serving index.html at the base path
-
-**Limitation**: Static files added BEFORE server starts. Cannot add dynamically (easily).
+- No Bunsai filesystem scan, watcher, or per-file handlers
+- Native `index.html`, 404, ETag, Last-Modified, and range request handling
+- Directory route configuration is passed through to `Bun.serve()`
 
 ### Build Artifacts
 
@@ -299,9 +291,9 @@ app.get("/api", () => json({ ok: true }));
 
 **Future**: Could add response helpers to framework.
 
-### 6. Static Files Not Cached by Default
+### 6. Static Directory Cache Headers
 
-**Limitation**: No cache-control headers added automatically.
+Directory routes provide Bun's native ETag and Last-Modified handling. Bunsai does not add its own `Cache-Control` policy.
 
 **Workaround**: Add middleware or manually set headers:
 ```typescript
@@ -312,7 +304,7 @@ app.get("/file.css", () => {
 });
 ```
 
-**Future**: Add caching options to `static()` method.
+**Decision**: Keep `static()` as a direct directory-route pass-through. Use an explicit file route or an upstream proxy when custom response headers are required.
 
 ## Performance Characteristics
 
@@ -320,7 +312,7 @@ app.get("/file.css", () => {
 
 1. **Route Lookup**: O(1) - direct object property access
 2. **Middleware Composition**: Happens once at registration, not per-request
-3. **Static Files**: Uses `Bun.file()` which is optimized for streaming
+3. **Static Files**: Uses Bun's native directory route implementation
 4. **WebSocket**: Leverages Bun's native pub/sub (no emulation)
 5. **Memory**: Minimal overhead - routes stored as simple objects
 
