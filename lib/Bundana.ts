@@ -163,7 +163,7 @@ export class Bundana<WebSocketData> {
         handler: Handler<WebSocketData>,
         middlewares?: Middleware<WebSocketData>[]
     ) {
-        const mws = middlewares ?? this.middlewares;
+        const mws = [...this.middlewares, ...(middlewares ?? [])];
         const finalHandler = this.compose(handler, mws);
 
         const route = this.routes[path] ?? {};

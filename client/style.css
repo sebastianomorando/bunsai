@@ -462,6 +462,23 @@ body {
   font-size: 0.9rem;
 }
 
+.status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.status.active {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.status.inactive {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
 .pagination {
   margin-top: 1rem;
   padding-top: 0.9rem;

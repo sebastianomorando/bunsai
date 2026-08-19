@@ -43,6 +43,15 @@ const resetPassword = async (identifier: string): Promise<void> => {
   console.log(`Nuova password: ${newPassword}`);
 };
 
+const activateUser = async (identifier: string): Promise<void> => {
+  const user = await User.getByUsernameOrEmail(identifier);
+  if (!user) {
+    throw new Error("Utente non trovato");
+  }
+  await user.setActive(true);
+  console.log(`Utente attivato: ${user.username}`);
+};
+
 const command = process.argv[2];
 
 if (command === "create") {
@@ -71,5 +80,17 @@ if (command === "reset-password") {
   process.exit(0);
 }
 
-console.error("Comando non valido. Comandi: create, reset-password");
+if (command === "activate") {
+  const identifier = process.argv[3];
+
+  if (!identifier) {
+    console.error("Uso: bun run cli/user.ts activate <username|email>");
+    process.exit(1);
+  }
+
+  await activateUser(identifier);
+  process.exit(0);
+}
+
+console.error("Comando non valido. Comandi: create, reset-password, activate");
 process.exit(1);

@@ -18,7 +18,7 @@ L'idea: darti una base full stack Bun pronta all'uso, con il minimo livello di a
 - Routing express-style (`app.get/post/put/...`) e routing decorator-based
 - Sistema decorators avanzato:
   - binding argomenti (`@Args`, `Param`, `Body`, `Query`, ...)
-  - auth/ownership (`@RequireAuth`, `@RequireOwner`)
+  - auth/ownership/ruoli (`@RequireAuth`, `@RequireOwner`, `@RequireRole`)
   - serializzazione (`@Serialize`)
   - mapping errori HTTP tipizzati
 - Auth di esempio con sessioni cookie-based
@@ -53,7 +53,7 @@ Imposta almeno:
 - `DATABASE_URL`
 - `PORT` (opzionale, default 3000)
 
-Per abilitare il reset password via email configura anche `APP_URL`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL` e, opzionalmente, `MAIL_FROM_NAME` come mostrato in `.env.example`.
+Conferma email e reset password richiedono `APP_URL`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL` e, opzionalmente, `MAIL_FROM_NAME` come mostrato in `.env.example`. Dietro Caddy imposta `APP_URL` all’origine pubblica `https://`: il cookie di sessione riceverà `Secure` anche se Caddy comunica con Bun via HTTP.
 
 3. Esegui migrazioni
 
@@ -147,7 +147,10 @@ registerClassRoutes(app, User);
 - Login/logout via sessione cookie (`session_id`)
 - `@RequireAuth()` -> blocca richieste non autenticate (`401`)
 - `@RequireOwner(...)` -> accesso solo al proprietario (`403`)
+- `@RequireRole("admin")` -> accesso riservato agli amministratori (`403`)
 - Bypass admin: per default utenti con `role = "admin"` non hanno restrizioni owner
+- La registrazione invia un link di conferma valido 24 ore. Nel database resta solo l’hash del token e gli utenti inattivi non possono accedere.
+- Gli amministratori possono attivare o disattivare utenti dalla dashboard; la disattivazione revoca sessioni e API token.
 - Il reset password invia via email un link monouso valido un'ora. Il token resta nel frammento URL e non viene inviato nella richiesta della pagina; la risposta REST non lo include mai e non rivela se l'indirizzo esiste. Nel database viene conservato solo l'hash SHA-256. Il completamento del reset revoca sessioni e API token esistenti.
 - Lista utenti:
   - utente normale: vede solo sé stesso
@@ -161,12 +164,14 @@ Esempio flusso con cookie jar:
 # Register
 curl -i -X POST http://localhost:3000/api/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"alice","email":"alice@example.com","password":"secret"}'
+  -d '{"username":"alice","email":"alice@example.com","password":"secret123"}'
+
+# Apri il link di conferma ricevuto via email prima del login
 
 # Login (salva cookie)
 curl -i -c cookie.txt -X POST http://localhost:3000/api/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"alice","password":"secret"}'
+  -d '{"username":"alice","password":"secret123"}'
 
 # Lista utenti (autenticato, paginata + ordinabile)
 curl -i -b cookie.txt "http://localhost:3000/api/users?page=1&limit=10&sortBy=date_created&sortDir=desc"
@@ -194,6 +199,7 @@ Il frontend è in `client/` ed è già configurato per:
 Pagine incluse:
 
 - `/register`
+- `/confirm-email`
 - `/login`
 - `/users`
 - `/users/:id`
@@ -208,6 +214,9 @@ bun run cli/user.ts create <username> [password] [email]
 
 # Reset password (username o email)
 bun run cli/user.ts reset-password <username|email>
+
+# Attiva utente (username o email)
+bun run cli/user.ts activate <username|email>
 
 # Seed utenti demo (49 user + 1 admin)
 bun run seed.ts

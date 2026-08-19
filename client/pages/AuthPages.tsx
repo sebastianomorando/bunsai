@@ -1,6 +1,6 @@
 import { useLocation } from "preact-iso";
 import { useEffect, useState } from "preact/hooks";
-import { apiRequest, fetchUsers } from "../api.ts";
+import { apiRequest, fetchProfile, fetchUsers } from "../api.ts";
 import { t } from "../i18n.ts";
 import {
   errorMessage,
@@ -29,15 +29,8 @@ export function RegisterPage() {
         body: JSON.stringify({ username, email, password }),
       });
 
-      const session = await apiRequest<SessionInfo>("/api/login", {
-        method: "POST",
-        body: JSON.stringify({ username, password }),
-      });
-
-      sessionState.value = session;
-      await fetchUsers();
       setNotice(t("notice.registerSuccess"));
-      route("/users");
+      route("/login");
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -52,6 +45,8 @@ export function RegisterPage() {
         {t("field.username")}
         <input
           value={username}
+          minLength={3}
+          maxLength={255}
           onInput={(event) => setUsername((event.target as HTMLInputElement).value)}
           required
         />
@@ -61,6 +56,7 @@ export function RegisterPage() {
         <input
           type="email"
           value={email}
+          maxLength={255}
           onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
           required
         />
@@ -70,6 +66,8 @@ export function RegisterPage() {
         <input
           type="password"
           value={password}
+          minLength={8}
+          maxLength={1024}
           onInput={(event) => setPassword((event.target as HTMLInputElement).value)}
           required
         />
@@ -78,6 +76,51 @@ export function RegisterPage() {
         {pendingState.value ? t("register.submitLoading") : t("register.submit")}
       </button>
     </form>
+  );
+}
+
+export function ConfirmEmailPage() {
+  const [status, setStatus] = useState<"pending" | "success" | "error">("pending");
+  const [message, setMessage] = useState("");
+  const [token] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.hash.slice(1)).get("token") || ""
+  );
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    if (!token) {
+      setStatus("error");
+      setMessage(t("emailConfirmation.invalid"));
+      return;
+    }
+    void apiRequest("/api/email-confirmation", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    })
+      .then(() => {
+        setStatus("success");
+        setMessage(t("emailConfirmation.success"));
+      })
+      .catch((error) => {
+        setStatus("error");
+        setMessage(errorMessage(error));
+      });
+  }, [token]);
+
+  return (
+    <section class="panel">
+      <h2>{t("emailConfirmation.title")}</h2>
+      <p>{status === "pending" ? t("emailConfirmation.pending") : message}</p>
+      {status !== "pending" && (
+        <a class="button" href={status === "success" ? "/login" : "/register"}>
+          {status === "success" ? t("emailConfirmation.login") : t("emailConfirmation.registerAgain")}
+        </a>
+      )}
+    </section>
   );
 }
 
@@ -98,7 +141,7 @@ export function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
       sessionState.value = session;
-      await fetchUsers();
+      await Promise.all([fetchUsers(), fetchProfile()]);
       setNotice(t("notice.loginSuccess"));
       route("/users");
     } catch (error) {

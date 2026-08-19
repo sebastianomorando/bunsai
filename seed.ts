@@ -57,6 +57,7 @@ async function upsertUser(user: SeedUser) {
       role: user.role,
       is_active: true,
       activation_token: null,
+      activation_token_expires_at: null,
       api_token: null,
     })}
     ON CONFLICT (username)
@@ -66,6 +67,7 @@ async function upsertUser(user: SeedUser) {
       role = EXCLUDED.role,
       is_active = EXCLUDED.is_active,
       activation_token = EXCLUDED.activation_token,
+      activation_token_expires_at = EXCLUDED.activation_token_expires_at,
       api_token = EXCLUDED.api_token,
       date_updated = EXCLUDED.date_updated
   `;

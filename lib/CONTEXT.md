@@ -70,23 +70,14 @@ private compose(handler, middlewares): Handler {
 }
 ```
 
-### Decision 2: Per-Route Middleware Replaces Global
+### Decision 2: Global Middleware Precedes Per-Route Middleware
 
-**What We Chose**: When per-route middleware is provided, it REPLACES global middleware, not appends.
+**What We Chose**: Global middleware and per-route middleware are concatenated when the route is registered.
 
 **Why**:
-- Simplicity: Easier to reason about middleware order
-- Flexibility: Routes can opt-out of global middleware
-- Performance: Fewer middleware to execute
-
-**Alternative Considered**: Concatenate global + per-route middleware
-- Rejected because: Less control, potential performance hit, harder to debug
-
-**How to Use Both**: If you need both global and per-route:
-```typescript
-const allMiddlewares = [...app.middlewares, customMiddleware];
-app.get("/path", handler, allMiddlewares);
-```
+- Security: a route-specific middleware cannot silently bypass global authentication or hardening
+- Predictability: execution always follows global middleware, then per-route middleware, then the handler
+- Performance: the combined chain is still built only once at route registration
 
 ### Decision 3: Error Handling via Try-Catch in Composition
 
@@ -182,10 +173,9 @@ This matches Bun.serve() expectations exactly.
 
 For a route with per-route middleware:
 ```
-1. Per-route middleware[0]
-2. Per-route middleware[1]
-3. ... (all per-route middleware)
-4. Route handler
+1. Global middleware[0..n]
+2. Per-route middleware[0..n]
+3. Route handler
 ```
 
 For a route WITHOUT per-route middleware:
@@ -196,7 +186,7 @@ For a route WITHOUT per-route middleware:
 4. Route handler
 ```
 
-**Note**: Global and per-route middleware do NOT combine automatically.
+**Note**: Global middleware must be registered before the route because chains are composed at registration time.
 
 ### Static File Serving
 
@@ -221,18 +211,7 @@ artifacts: { [entrypoint: string]: Bun.BuildArtifact } = {};
 
 ## Known Limitations
 
-### 1. Middleware Order Control
-
-**Limitation**: Cannot easily mix global and per-route middleware.
-
-**Workaround**: Manually combine arrays:
-```typescript
-app.get("/path", handler, [...app.middlewares, customMw]);
-```
-
-**Future**: Could add an `appendMiddleware` option to route methods.
-
-### 2. Single Server Per Instance
+### 1. Single Server Per Instance
 
 **Limitation**: `listen()` can only be called once per Bundana instance.
 

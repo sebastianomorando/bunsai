@@ -62,6 +62,14 @@ Decorator base per guardie custom.
 Richiede sessione valida (`401` se assente).  
 La sessione viene letta da `req.session` se presente, altrimenti da cookie (`Session.getFromRequest`).
 
+### `@RequireRole(...roles)`
+
+Richiede una sessione valida e uno dei ruoli indicati (`403` in caso contrario).
+
+```ts
+@RequireRole("admin")
+```
+
 ### `@RequireOwner(...)`
 
 Richiede che l’utente autenticato sia il proprietario della risorsa (`403` se mismatch).

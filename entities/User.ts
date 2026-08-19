@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { sql } from "bun";
-import Session from "./Session";
+import Session, { clearSessionCookie } from "./Session";
 import {
   Args,
   Body,
@@ -10,6 +10,7 @@ import {
   Req,
   RequireAuth,
   RequireOwner,
+  RequireRole,
   Route,
   Serialize,
 } from "../server/decorators";
@@ -27,6 +28,12 @@ import {
   PASSWORD_RESET_TTL_MS,
   sendPasswordResetEmail,
 } from "../server/passwordReset";
+import {
+  createEmailConfirmationToken,
+  EMAIL_CONFIRMATION_TTL_MS,
+  hashEmailConfirmationToken,
+  sendEmailConfirmation,
+} from "../server/emailConfirmation";
 
 export type UserRole = "user" | "admin";
 
@@ -40,6 +47,7 @@ export interface UserRecord {
   role: UserRole;
   is_active: boolean;
   activation_token: string | null;
+  activation_token_expires_at?: Date | null;
   api_token: string | null;
   default_company_id?: string | null;
   profile_asset_id?: string | null;
@@ -241,6 +249,7 @@ class User {
   role: UserRole;
   isActive: boolean;
   activationToken: string | null;
+  activationTokenExpiresAt: Date | null;
   apiToken: string | null;
   profileAssetId: string | null;
 
@@ -254,6 +263,9 @@ class User {
     this.role = record.role;
     this.isActive = record.is_active;
     this.activationToken = record.activation_token;
+    this.activationTokenExpiresAt = record.activation_token_expires_at
+      ? new Date(record.activation_token_expires_at)
+      : null;
     this.apiToken = record.api_token;
     this.profileAssetId = record.profile_asset_id ?? null;
   }
@@ -272,8 +284,16 @@ class User {
 
   async updatePassword(newPassword: string): Promise<void> {
     const passwordHash = await Bun.password.hash(newPassword);
-    await sql`UPDATE users SET password = ${passwordHash}, date_updated = ${new Date()} WHERE id = ${this.id}`;
+    await sql.begin(async (tx) => {
+      await tx`
+        UPDATE users
+        SET password = ${passwordHash}, api_token = NULL, date_updated = ${new Date()}
+        WHERE id = ${this.id}
+      `;
+      await tx`DELETE FROM sessions WHERE user_id = ${this.id}`;
+    });
     this.passwordHash = passwordHash;
+    this.apiToken = null;
   }
 
   async verifyPassword(password: string): Promise<boolean> {
@@ -294,6 +314,28 @@ class User {
   async revokeApiToken(): Promise<void> {
     await sql`UPDATE users SET api_token = NULL, date_updated = ${new Date()} WHERE id = ${this.id}`;
     this.apiToken = null;
+  }
+
+  async setActive(isActive: boolean): Promise<void> {
+    await sql.begin(async (tx) => {
+      await tx`
+        UPDATE users
+        SET
+          is_active = ${isActive},
+          activation_token = NULL,
+          activation_token_expires_at = NULL,
+          api_token = CASE WHEN ${isActive} THEN api_token ELSE NULL END,
+          date_updated = ${new Date()}
+        WHERE id = ${this.id}
+      `;
+      if (!isActive) {
+        await tx`DELETE FROM sessions WHERE user_id = ${this.id}`;
+      }
+    });
+    this.isActive = isActive;
+    this.activationToken = null;
+    this.activationTokenExpiresAt = null;
+    if (!isActive) this.apiToken = null;
   }
 
   static generateApiToken(): string {
@@ -341,7 +383,9 @@ class User {
     }
 
     if (input.newPassword) {
-      if (input.newPassword.length < 8) throw new ValidationError("La password deve contenere almeno 8 caratteri");
+      if (input.newPassword.length < 8 || input.newPassword.length > 1024) {
+        throw new ValidationError("La password deve contenere da 8 a 1024 caratteri");
+      }
       if (!input.currentPassword || !await user.verifyPassword(input.currentPassword)) {
         throw new NotAuthenticatedError("Password corrente non valida");
       }
@@ -356,8 +400,41 @@ class User {
     const nextUsername = username || user.username;
     const nextEmail = email || user.email;
     const nextProfileAssetId = input.profileAssetId === undefined ? user.profileAssetId : input.profileAssetId;
-    await sql`UPDATE users SET username = ${nextUsername}, email = ${nextEmail}, profile_asset_id = ${nextProfileAssetId}, date_updated = ${now} WHERE id = ${user.id}`;
-    if (input.newPassword) await user.updatePassword(input.newPassword);
+    const emailChanged = nextEmail !== user.email;
+    let activationTokenHash: string | null = user.activationToken;
+    let activationTokenExpiresAt: Date | null = user.activationTokenExpiresAt;
+
+    if (emailChanged) {
+      const activationToken = createEmailConfirmationToken();
+      activationTokenHash = hashEmailConfirmationToken(activationToken);
+      activationTokenExpiresAt = new Date(Date.now() + EMAIL_CONFIRMATION_TTL_MS);
+      await sendEmailConfirmation(nextEmail, activationToken);
+    }
+
+    await sql.begin(async (tx) => {
+      await tx`
+        UPDATE users
+        SET
+          username = ${nextUsername},
+          email = ${nextEmail},
+          profile_asset_id = ${nextProfileAssetId},
+          is_active = ${emailChanged ? false : user.isActive},
+          activation_token = ${activationTokenHash},
+          activation_token_expires_at = ${activationTokenExpiresAt},
+          api_token = ${emailChanged ? null : user.apiToken},
+          date_updated = ${now}
+        WHERE id = ${user.id}
+      `;
+      if (emailChanged) {
+        await tx`DELETE FROM sessions WHERE user_id = ${user.id}`;
+      }
+    });
+    if (input.newPassword) {
+      await user.updatePassword(input.newPassword);
+    }
+    if (emailChanged || input.newPassword) {
+      clearSessionCookie(req);
+    }
     const updated = await User.getById(user.id);
     if (!updated) throw new NotFoundError("Utente non trovato");
     return updated;
@@ -367,21 +444,52 @@ class User {
   @Serialize(serializeUserPayload)
   @Args(Body())
   static async register(input: RegisterInput): Promise<User> {
+    if (!input || typeof input !== "object") {
+      throw new ValidationError("Dati di registrazione non validi");
+    }
+    const username = typeof input.username === "string" ? input.username.trim() : "";
+    const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+    const password = typeof input.password === "string" ? input.password : "";
+    if (username.length < 3 || username.length > 255) {
+      throw new ValidationError("Lo username deve contenere da 3 a 255 caratteri");
+    }
+    if (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new ValidationError("Email non valida");
+    }
+    if (password.length < 8 || password.length > 1024) {
+      throw new ValidationError("La password deve contenere da 8 a 1024 caratteri");
+    }
+    const existing = await sql`
+      SELECT id FROM users
+      WHERE username = ${username} OR email = ${email}
+      LIMIT 1
+    `;
+    if (existing.length) throw new ConflictError("Username o email gia in uso");
+
     const userId = Bun.randomUUIDv7();
-    const companyId = Bun.randomUUIDv7();
+    const activationToken = createEmailConfirmationToken();
+    const activationTokenHash = hashEmailConfirmationToken(activationToken);
     const userToInsert = {
       id: userId,
-      username: input.username,
-      email: input.email,
-      password: await Bun.password.hash(input.password),
+      username,
+      email,
+      password: await Bun.password.hash(password),
       role: "user" as UserRole,
       is_active: false,
-      activation_token: Bun.randomUUIDv7(),
+      activation_token: activationTokenHash,
+      activation_token_expires_at: new Date(Date.now() + EMAIL_CONFIRMATION_TTL_MS),
       date_created: new Date(),
     };
 
     const rows = await sql`INSERT INTO users ${sql(userToInsert)} RETURNING *`;
-     const createdRow = rows[0] as UserRecord;
+    const createdRow = rows[0] as UserRecord;
+
+    try {
+      await sendEmailConfirmation(email, activationToken);
+    } catch (error) {
+      await sql`DELETE FROM users WHERE id = ${userId} AND is_active = false`;
+      throw error;
+    }
 
     return new User({
       ...createdRow,
@@ -394,15 +502,28 @@ class User {
   @Serialize(serializeSessionPayload)
   @Args(Body(), Req())
   static async login(input: LoginInput, req?: Bun.BunRequest): Promise<Session> {
-    const rows = await sql`SELECT * FROM users WHERE username = ${input.username} OR email = ${input.username}`;
+    const identifier = typeof input?.username === "string" ? input.username.trim() : "";
+    const password = typeof input?.password === "string" ? input.password : "";
+    if (!identifier || !password) {
+      throw new NotAuthenticatedError("Credenziali non valide");
+    }
+    const rows = await sql`
+      SELECT * FROM users
+      WHERE username = ${identifier} OR LOWER(email) = ${identifier.toLowerCase()}
+    `;
     if (rows.length === 0) {
       throw new NotAuthenticatedError("Credenziali non valide");
     }
 
     const row = rows[0] as UserRecord;
-    const valid = await Bun.password.verify(input.password, row.password);
+    const valid = await Bun.password.verify(password, row.password);
     if (!valid) {
       throw new NotAuthenticatedError("Credenziali non valide");
+    }
+    if (!row.is_active) {
+      throw new NotAuthenticatedError("Account non attivo: conferma il tuo indirizzo email", {
+        code: "ACCOUNT_INACTIVE",
+      });
     }
 
     return Session.initNewSession(row.id, req);
@@ -417,14 +538,7 @@ class User {
       throw new NotAuthenticatedError("Sessione non trovata");
     }
     await session.terminate();
-    req.cookies.set({
-      name: "session_id",
-      value: "",
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      expires: new Date(0),
-    });
+    clearSessionCookie(req);
   }
 
   @Route("GET", "/api/users/:id")
@@ -537,7 +651,11 @@ class User {
   @Serialize(serializeUserPayload)
   @Args(Query("identifier"))
   static async getByUsernameOrEmail(identifier: string): Promise<User | null> {
-    const rows = await sql`SELECT * FROM users WHERE username = ${identifier} OR email = ${identifier}`;
+    const normalizedIdentifier = typeof identifier === "string" ? identifier.trim() : "";
+    const rows = await sql`
+      SELECT * FROM users
+      WHERE username = ${normalizedIdentifier} OR LOWER(email) = ${normalizedIdentifier.toLowerCase()}
+    `;
     if (rows.length === 0) {
       return null;
     }
@@ -574,6 +692,57 @@ class User {
       date_created: new Date(row.date_created),
       date_updated: row.date_updated ? new Date(row.date_updated) : null,
     });
+  }
+
+  @Route("PATCH", "/api/users/:id/activation")
+  @RequireRole("admin")
+  @Serialize(serializeUserPayload)
+  @Args(Param("id"), BodyField("isActive"), Req())
+  static async setUserActivation(
+    id: string,
+    isActive: boolean,
+    req: Bun.BunRequest
+  ): Promise<User> {
+    if (typeof isActive !== "boolean") {
+      throw new ValidationError("isActive deve essere un booleano");
+    }
+    const session = await Session.getFromRequest(req);
+    if (!session) throw new NotAuthenticatedError("Sessione non trovata");
+    if (!isActive && session.userId === id) {
+      throw new ValidationError("Non puoi disattivare il tuo account amministratore");
+    }
+    const user = await User.getById(id);
+    if (!user) throw new NotFoundError("Utente non trovato");
+    await user.setActive(isActive);
+    const updated = await User.getById(id);
+    if (!updated) throw new NotFoundError("Utente non trovato");
+    return updated;
+  }
+
+  @Route("POST", "/api/email-confirmation")
+  @Args(BodyField("token"))
+  static async confirmEmail(token: string): Promise<{ message: string }> {
+    if (typeof token !== "string" || token.length < 32 || token.length > 512) {
+      throw new NotAuthorizedError("Token non valido o scaduto");
+    }
+    const tokenHash = hashEmailConfirmationToken(token);
+    const rows = await sql`
+      UPDATE users
+      SET
+        is_active = true,
+        activation_token = NULL,
+        activation_token_expires_at = NULL,
+        date_updated = ${new Date()}
+      WHERE
+        activation_token = ${tokenHash}
+        AND activation_token_expires_at > ${new Date()}
+        AND is_active = false
+      RETURNING id
+    `;
+    if (!rows.length) {
+      throw new NotAuthorizedError("Token non valido o scaduto");
+    }
+    return { message: "Email confermata" };
   }
 
   @Route("POST", "/api/password-reset/request")

@@ -1,8 +1,8 @@
 import { useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
-import { fetchUsers } from "../api.ts";
+import { fetchUsers, setUserActivation } from "../api.ts";
 import { t } from "../i18n.ts";
-import { errorMessage, pendingState, sessionState, setError, usersState } from "../state.ts";
+import { errorMessage, pendingState, profileState, sessionState, setError, setNotice, usersState } from "../state.ts";
 import type { SortDirection, UserSortBy } from "../types.ts";
 
 export function UsersPage() {
@@ -99,16 +99,36 @@ export function UsersPage() {
                 <strong>{user.username || t("users.unnamed")}</strong>
                 <p>{user.email || t("users.noEmail")}</p>
               </div>
-              <button
-                type="button"
-                class="button"
-                onClick={() => {
-                  if (user.id) route(`/users/${user.id}`);
-                }}
-                disabled={!user.id}
-              >
-                {t("users.detail")}
-              </button>
+              <div class="rowactions">
+                <span class={`status ${user.isActive ? "active" : "inactive"}`}>
+                  {user.isActive ? t("detail.activeYes") : t("detail.activeNo")}
+                </span>
+                {profileState.value?.role === "admin" && user.id && (
+                  <button
+                    type="button"
+                    class={`button ${user.isActive ? "danger" : "ghost"}`}
+                    disabled={pendingState.value || user.id === profileState.value.id}
+                    onClick={() => {
+                      const nextActive = !user.isActive;
+                      void setUserActivation(user.id!, nextActive)
+                        .then(() => setNotice(nextActive ? t("users.activated") : t("users.deactivated")))
+                        .catch((error) => setError(errorMessage(error)));
+                    }}
+                  >
+                    {user.isActive ? t("users.deactivate") : t("users.activate")}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  class="button"
+                  onClick={() => {
+                    if (user.id) route(`/users/${user.id}`);
+                  }}
+                  disabled={!user.id}
+                >
+                  {t("users.detail")}
+                </button>
+              </div>
             </li>
           ))}
         </ul>

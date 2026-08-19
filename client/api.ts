@@ -26,6 +26,7 @@ import {
 const apiCodeTranslations = {
   BAD_REQUEST: "error.badRequest",
   NOT_AUTHENTICATED: "error.notAuthenticated",
+  ACCOUNT_INACTIVE: "error.accountInactive",
   NOT_AUTHORIZED: "error.notAuthorized",
   NOT_FOUND: "error.notFound",
   CONFLICT: "error.conflict",
@@ -243,6 +244,27 @@ export async function fetchUserDetail(id: string) {
   try {
     const user = await apiRequest<PublicUser>(`/api/users/${encodeURIComponent(id)}`);
     detailState.value = user;
+    return user;
+  } finally {
+    pendingState.value = false;
+  }
+}
+
+export async function setUserActivation(id: string, isActive: boolean) {
+  pendingState.value = true;
+  try {
+    const user = await apiRequest<PublicUser>(
+      `/api/users/${encodeURIComponent(id)}/activation`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      }
+    );
+    usersState.value = {
+      ...usersState.value,
+      items: usersState.value.items.map((item) => (item.id === id ? user : item)),
+    };
+    if (detailState.value?.id === id) detailState.value = user;
     return user;
   } finally {
     pendingState.value = false;

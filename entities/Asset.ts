@@ -69,13 +69,25 @@ class Asset {
 
   @Route("GET", "/api/assets")
   @RequireAuth()
-  static async list() {
-    const rows = await sql`SELECT * FROM assets ORDER BY date_created DESC LIMIT 100`;
+  @Args(Req())
+  static async list(req: Bun.BunRequest) {
+    const session = await Session.getFromRequest(req);
+    if (!session) throw new BadRequestError("Sessione non disponibile");
+    const rows = await sql`
+      SELECT * FROM assets
+      WHERE uploaded_by = ${session.userId}
+      ORDER BY date_created DESC
+      LIMIT 100
+    `;
     return { items: (rows as AssetRecord[]).map(publicAsset) };
   }
 
   @Route("GET", "/api/assets/:id")
-  @RequireAuth()
+  @RequireOwner({
+    param: "id",
+    bypassRoles: [],
+    resolve: async (req) => (await findAsset((req as Bun.BunRequest & { params?: Record<string, string> }).params?.id ?? "")).uploaded_by,
+  })
   @Args(Param("id"))
   static async metadata(id: string) {
     return publicAsset(await findAsset(id));

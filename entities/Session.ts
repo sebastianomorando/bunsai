@@ -11,6 +11,35 @@ export interface SessionRecord {
   ip_address: string;
 }
 
+export function sessionCookieSecure(): boolean {
+  const override = process.env.SESSION_COOKIE_SECURE?.trim().toLowerCase();
+  if (override === "true") return true;
+  if (override === "false") return false;
+
+  const publicOrigin = process.env.APP_URL?.trim();
+  if (publicOrigin) {
+    try {
+      return new URL(publicOrigin).protocol === "https:";
+    } catch {
+      return false;
+    }
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
+export function clearSessionCookie(req: Bun.BunRequest): void {
+  req.cookies.set({
+    name: "session_id",
+    value: "",
+    path: "/",
+    httpOnly: true,
+    secure: sessionCookieSecure(),
+    sameSite: "lax",
+    expires: new Date(0),
+  });
+}
+
 class Session {
   id: string;
   userId: string;
@@ -46,6 +75,7 @@ class Session {
         value: sessionRecord.id,
         path: "/",
         httpOnly: true,
+        secure: sessionCookieSecure(),
         sameSite: "lax",
         expires: sessionRecord.expires_at,
       });

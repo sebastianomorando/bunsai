@@ -18,7 +18,7 @@ The idea is to give you a full-stack Bun baseline that is ready to run, with the
 - Express-style routing (`app.get/post/put/...`) and decorator-based routing
 - Advanced decorator system:
   - argument binding (`@Args`, `Param`, `Body`, `Query`, ...)
-  - auth/ownership (`@RequireAuth`, `@RequireOwner`)
+  - auth/ownership/roles (`@RequireAuth`, `@RequireOwner`, `@RequireRole`)
   - serialization (`@Serialize`)
   - typed HTTP error mapping
 - Example auth with cookie-based sessions
@@ -53,7 +53,7 @@ Set at least:
 - `DATABASE_URL`
 - `PORT` (optional, default 3000)
 
-To enable password reset by email, also configure `APP_URL`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL`, and optionally `MAIL_FROM_NAME` as shown in `.env.example`.
+Email confirmation and password reset require `APP_URL`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL`, and optionally `MAIL_FROM_NAME` as shown in `.env.example`. Behind Caddy, set `APP_URL` to the public `https://` origin: session cookies will then receive the `Secure` attribute even if Caddy talks to Bun over HTTP.
 
 3. Run migrations
 
@@ -139,7 +139,10 @@ registerClassRoutes(app, User);
 - Login/logout via cookie session (`session_id`)
 - `@RequireAuth()` -> blocks unauthenticated requests (`401`)
 - `@RequireOwner(...)` -> owner-only access (`403`)
+- `@RequireRole("admin")` -> admin-only access (`403`)
 - Admin bypass: by default, users with `role = "admin"` bypass owner checks
+- Registration sends a 24-hour email confirmation link. Only the token hash is stored and inactive users cannot log in.
+- Admins can activate/deactivate users from the dashboard; deactivation revokes sessions and API tokens.
 - Password reset sends a one-hour, single-use link by email. The token stays in the URL fragment so it is not sent in the page request; the REST response never includes it and does not reveal whether the address exists. Only the SHA-256 token hash is stored. Completing a reset revokes existing sessions and API tokens.
 - User listing:
   - normal user: sees only themselves
@@ -153,12 +156,14 @@ Example flow with cookie jar:
 # Register
 curl -i -X POST http://localhost:3000/api/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"alice","email":"alice@example.com","password":"secret"}'
+  -d '{"username":"alice","email":"alice@example.com","password":"secret123"}'
+
+# Open the confirmation link received by email before logging in
 
 # Login (save cookie)
 curl -i -c cookie.txt -X POST http://localhost:3000/api/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"alice","password":"secret"}'
+  -d '{"username":"alice","password":"secret123"}'
 
 # Users list (authenticated, paginated + sortable)
 curl -i -b cookie.txt "http://localhost:3000/api/users?page=1&limit=10&sortBy=date_created&sortDir=desc"
@@ -172,7 +177,7 @@ curl -i -b cookie.txt -X POST http://localhost:3000/api/logout
 
 ## Asset API
 
-Assets are stored outside the database (under `data/assets` by default), while metadata lives in PostgreSQL. Upload, listing, metadata and deletion require authentication; the asset URL itself is public.
+Assets are stored outside the database (under `data/assets` by default), while metadata lives in PostgreSQL. Each authenticated user can list and read metadata only for their own assets; the asset URL itself is public.
 
 ```bash
 # Upload
@@ -210,6 +215,7 @@ Frontend lives in `client/` and is already configured for:
 Included pages:
 
 - `/register`
+- `/confirm-email`
 - `/login`
 - `/users`
 - `/users/:id`
@@ -224,6 +230,9 @@ bun run cli/user.ts create <username> [password] [email]
 
 # Reset password (username or email)
 bun run cli/user.ts reset-password <username|email>
+
+# Activate a user (username or email)
+bun run cli/user.ts activate <username|email>
 
 # Seed demo users (49 user + 1 admin)
 bun run seed.ts

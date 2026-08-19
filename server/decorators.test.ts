@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import type { Handler, Middleware } from "../lib/Bundana";
+import { Bundana, type Handler, type Middleware } from "../lib/Bundana";
 import {
   Args,
   registerClassRoutes,
@@ -12,6 +12,7 @@ import {
   Req,
   RequireAuth,
   RequireOwner,
+  RequireRole,
   Serialize,
 } from "./decorators";
 import {
@@ -47,6 +48,32 @@ function routeByPath(calls: RouteCall[], path: string) {
 }
 
 describe("server decorators", () => {
+  it("mantiene i middleware globali sulle route decorate", async () => {
+    const app = new Bundana();
+    const calls: string[] = [];
+    app.use(async (_req, _server, next) => {
+      calls.push("global");
+      return next();
+    });
+
+    class Controller {
+      @Route("GET", "/decorated")
+      static route() {
+        calls.push("handler");
+        return "ok";
+      }
+    }
+
+    registerClassRoutes(app, Controller);
+    const route = app.routes["/decorated"] as { GET: Handler<any> };
+    const response = await route.GET(
+      new Request("http://localhost/decorated") as Bun.BunRequest,
+      {} as Bun.Server<unknown>
+    );
+    expect(await response.text()).toBe("ok");
+    expect(calls).toEqual(["global", "handler"]);
+  });
+
   it("registra route e middlewares anche con @Use sopra o sotto @Route", () => {
     const mwTop: Middleware<any> = async (_req, _server, next) => next();
     const mwBottom: Middleware<any> = async (_req, _server, next) => next();
@@ -413,5 +440,32 @@ describe("server decorators", () => {
     );
     expect(adminRes.status).toBe(200);
     expect(await adminRes.json()).toEqual({ id: "u-2" });
+  });
+
+  it("applica @RequireRole alle route amministrative", async () => {
+    class Controller {
+      @Route("PATCH", "/admin")
+      @RequireRole("admin")
+      static adminOnly() {
+        return { ok: true };
+      }
+    }
+
+    const { router, calls } = createRouterSpy();
+    registerClassRoutes(router as any, Controller);
+    const handler = routeByPath(calls, "/admin").handler;
+
+    const forbidden = await handler(
+      { session: { userId: "u-1" }, user: { id: "u-1", role: "user" } } as any,
+      {} as any
+    );
+    expect(forbidden.status).toBe(403);
+
+    const allowed = await handler(
+      { session: { userId: "a-1" }, user: { id: "a-1", role: "admin" } } as any,
+      {} as any
+    );
+    expect(allowed.status).toBe(200);
+    expect(await allowed.json()).toEqual({ ok: true });
   });
 });

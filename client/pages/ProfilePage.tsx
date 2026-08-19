@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { useLocation } from "preact-iso";
 import { fetchAssets, fetchProfile, updateProfile, uploadAsset } from "../api.ts";
 import { t } from "../i18n.ts";
-import { assetsState, errorMessage, pendingState, profileState, sessionState, setError, setNotice } from "../state.ts";
+import { assetsState, errorMessage, pendingState, profileState, resetAssetsState, resetUsersState, sessionState, setError, setNotice } from "../state.ts";
 
 export function ProfilePage() {
+  const { route } = useLocation();
   const avatarInput = useRef<HTMLInputElement>(null);
   const profile = profileState.value;
   const [username, setUsername] = useState(profile?.username ?? "");
@@ -51,6 +53,8 @@ export function ProfilePage() {
 
   const onSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
+    const emailChanged = email.trim().toLowerCase() !== profile?.email?.toLowerCase();
+    const passwordChanged = Boolean(newPassword);
     try {
       await updateProfile({
         username, email, profileAssetId,
@@ -58,7 +62,15 @@ export function ProfilePage() {
       });
       setCurrentPassword("");
       setNewPassword("");
-      setNotice(t("profile.saved"));
+      if (emailChanged || passwordChanged) {
+        sessionState.value = null;
+        resetUsersState();
+        resetAssetsState();
+        setNotice(emailChanged ? t("profile.emailConfirmationSent") : t("profile.passwordChanged"));
+        route("/login");
+      } else {
+        setNotice(t("profile.saved"));
+      }
     } catch (error) {
       setError(errorMessage(error));
     }

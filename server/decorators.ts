@@ -204,6 +204,20 @@ export function RequireAuth() {
   });
 }
 
+export function RequireRole(...roles: string[]) {
+  return Guard(async (req) => {
+    const session = await requireSession(req);
+    const currentUser = await getCurrentUser(req, session);
+    if (!currentUser) {
+      throw new NotAuthenticatedError("Utente sessione non trovato");
+    }
+    const role = readRole(currentUser);
+    if (!role || !roles.includes(role)) {
+      throw new NotAuthorizedError("Ruolo non autorizzato");
+    }
+  });
+}
+
 export function RequireOwner(
   configOrParam: string | RequireOwnerOptions = "id"
 ) {

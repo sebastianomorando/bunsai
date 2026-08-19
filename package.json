@@ -55,7 +55,7 @@
   },
   "dependencies": {
     "@preact/signals": "^2.11.1",
-    "nodemailer": "^8.0.1",
+    "nodemailer": "^9.0.5",
     "preact": "^10.29.8",
     "preact-iso": "^2.12.2"
   }

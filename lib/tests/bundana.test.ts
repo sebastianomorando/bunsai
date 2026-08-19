@@ -213,8 +213,7 @@ describe("Bundana", () => {
             startServer();
 
             await fetch(`http://localhost:${port}/test`);
-            // Per-route middleware replaces global middleware, not appends
-            expect(log).toEqual(["per-route", "handler"]);
+            expect(log).toEqual(["global", "per-route", "handler"]);
         });
 
         it("should allow middleware to short-circuit", async () => {

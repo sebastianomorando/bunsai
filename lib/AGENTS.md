@@ -38,7 +38,7 @@ It provides:
    - Per-route middleware: passed as 3rd parameter to route methods
    - Middleware composition via `compose()` method
    - Each middleware receives `(req, server, next) => Response`
-   - **Important**: Per-route middleware REPLACES global middleware (doesn't append)
+   - Global middleware runs first; per-route middleware is appended afterward
 
 4. **Error Handling**
    - Try-catch in `compose()` catches all handler/middleware errors
@@ -304,7 +304,7 @@ describe("Feature Name", () => {
    - Verify `Bun.serve()` has routes object
 
 3. **Middleware not running**
-   - Check if per-route middleware overrides global
+   - Check that global middleware is registered before the route and that `next()` is called
    - Ensure `next()` is called
 
 4. **TypeScript errors**
@@ -337,6 +337,22 @@ Before releasing a new version:
 4. [ ] Version bumped in package.json
 5. [ ] Git tag created
 6. [ ] Breaking changes documented
+
+## Mandatory Security Review
+
+After adding or changing any feature, perform a security review proportionate to the affected surface before considering the work complete.
+
+At minimum, verify when applicable:
+
+1. Authentication, authorization, and tenant/user data isolation
+2. Input validation and size limits, output serialization, and sensitive-data exposure
+3. Session, cookie, token, password, secret, and logging behavior
+4. Injection, XSS, CSRF, path traversal, SSRF, filesystem, and network risks
+5. Brute force and unbounded CPU, memory, storage, or external-service consumption
+6. Safe error handling and concurrent-request behavior
+7. Dependency advisories with `bun audit` whenever `package.json` or `bun.lock` changes
+
+Add regression tests for security controls introduced by the feature. Record any accepted or deployment-dependent residual risk in `SECURITY_AUDIT.md` or the relevant documentation.
 
 ## Questions for Future Contributors
 

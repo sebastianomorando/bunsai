@@ -12,6 +12,7 @@ export const translations = {
     "error.http": "HTTP error {status}",
     "error.badRequest": "Bad request",
     "error.notAuthenticated": "Authentication required",
+    "error.accountInactive": "Confirm your email address before signing in",
     "error.notAuthorized": "Access denied",
     "error.notFound": "Resource not found",
     "error.conflict": "Conflict",
@@ -21,7 +22,7 @@ export const translations = {
     "error.genericHttp": "Unexpected error",
 
     "notice.logoutSuccess": "Logged out",
-    "notice.registerSuccess": "Registration completed and login successful",
+    "notice.registerSuccess": "Registration completed. Check your inbox to activate the account.",
     "notice.loginSuccess": "Login successful",
 
     "assets.authRequiredTitle": "Authentication required",
@@ -59,6 +60,8 @@ export const translations = {
     "profile.save": "Save profile",
     "profile.saving": "Saving...",
     "profile.saved": "Profile updated",
+    "profile.passwordChanged": "Password updated. Sign in again with the new password.",
+    "profile.emailConfirmationSent": "Check your new inbox to reactivate the account.",
 
     "brand.title": "Bunsai Users",
 
@@ -104,6 +107,13 @@ export const translations = {
     "passwordReset.invalidDescription": "This reset link does not contain a valid token.",
     "passwordReset.requestAgain": "Request another link",
 
+    "emailConfirmation.title": "Email confirmation",
+    "emailConfirmation.pending": "Confirming your email...",
+    "emailConfirmation.success": "Email confirmed. Your account is now active.",
+    "emailConfirmation.invalid": "This confirmation link is invalid or has expired.",
+    "emailConfirmation.login": "Sign in",
+    "emailConfirmation.registerAgain": "Register again",
+
     "field.username": "Username",
     "field.email": "Email",
     "field.password": "Password",
@@ -131,6 +141,10 @@ export const translations = {
     "users.prev": "Previous",
     "users.next": "Next",
     "users.perPage": "Per page",
+    "users.activate": "Activate",
+    "users.deactivate": "Deactivate",
+    "users.activated": "User activated",
+    "users.deactivated": "User deactivated and sessions revoked",
 
     "detail.title": "User details",
     "detail.loading": "Loading user details...",
@@ -157,6 +171,7 @@ export const translations = {
     "error.http": "Errore HTTP {status}",
     "error.badRequest": "Richiesta non valida",
     "error.notAuthenticated": "Autenticazione richiesta",
+    "error.accountInactive": "Conferma il tuo indirizzo email prima di accedere",
     "error.notAuthorized": "Accesso negato",
     "error.notFound": "Risorsa non trovata",
     "error.conflict": "Conflitto",
@@ -166,7 +181,7 @@ export const translations = {
     "error.genericHttp": "Errore imprevisto",
 
     "notice.logoutSuccess": "Logout effettuato",
-    "notice.registerSuccess": "Registrazione completata e login effettuato",
+    "notice.registerSuccess": "Registrazione completata. Controlla la posta per attivare l’account.",
     "notice.loginSuccess": "Accesso effettuato",
 
     "assets.authRequiredTitle": "Accesso richiesto",
@@ -204,6 +219,8 @@ export const translations = {
     "profile.save": "Salva profilo",
     "profile.saving": "Salvataggio...",
     "profile.saved": "Profilo aggiornato",
+    "profile.passwordChanged": "Password aggiornata. Accedi di nuovo con la nuova password.",
+    "profile.emailConfirmationSent": "Controlla la nuova casella email per riattivare l’account.",
 
     "brand.title": "Bunsai Users",
 
@@ -249,6 +266,13 @@ export const translations = {
     "passwordReset.invalidDescription": "Il link di reset non contiene un token valido.",
     "passwordReset.requestAgain": "Richiedi un altro link",
 
+    "emailConfirmation.title": "Conferma email",
+    "emailConfirmation.pending": "Conferma dell’email in corso...",
+    "emailConfirmation.success": "Email confermata. Il tuo account è ora attivo.",
+    "emailConfirmation.invalid": "Questo link di conferma non è valido o è scaduto.",
+    "emailConfirmation.login": "Accedi",
+    "emailConfirmation.registerAgain": "Registrati di nuovo",
+
     "field.username": "Username",
     "field.email": "Email",
     "field.password": "Password",
@@ -276,6 +300,10 @@ export const translations = {
     "users.prev": "Precedente",
     "users.next": "Successiva",
     "users.perPage": "Per pagina",
+    "users.activate": "Attiva",
+    "users.deactivate": "Disattiva",
+    "users.activated": "Utente attivato",
+    "users.deactivated": "Utente disattivato e sessioni revocate",
 
     "detail.title": "Dettaglio utente",
     "detail.loading": "Caricamento dettaglio...",

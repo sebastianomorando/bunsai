@@ -4,6 +4,7 @@ import { apiRequest, bootstrapFromCookie } from "./api.ts";
 import { localeState, readStoredLocale, setLocale, t } from "./i18n.ts";
 import {
   ForgotPasswordPage,
+  ConfirmEmailPage,
   LoginPage,
   RegisterPage,
   ResetPasswordPage,
@@ -108,6 +109,7 @@ export function AppLayout() {
           <Route path="/login" component={LoginPage} />
           <Route path="/forgot-password" component={ForgotPasswordPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />
+          <Route path="/confirm-email" component={ConfirmEmailPage} />
           <Route path="/users" component={UsersPage} />
           <Route path="/users/:id" component={UserDetailPage} />
           <Route path="/assets" component={AssetsPage} />

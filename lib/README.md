@@ -148,6 +148,8 @@ app.get(
 );
 ```
 
+Global middleware registered with `app.use()` runs first, followed by the middleware supplied for the route.
+
 ### Basic Authentication Middleware
 
 Bundana includes a built-in basic authentication middleware:
@@ -573,7 +575,6 @@ All tests use Bun's built-in test runner (`bun:test`) and spin up ephemeral serv
 
 ## Limitations
 
-- Middleware execution order: per-route middleware array replaces (not appends to) global middleware
 - Server can only be started once per instance (call `listen()` only once)
 
 ## License
