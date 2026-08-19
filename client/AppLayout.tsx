@@ -2,7 +2,12 @@ import { Route, Router, useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
 import { apiRequest, bootstrapFromCookie } from "./api.ts";
 import { localeState, readStoredLocale, setLocale, t } from "./i18n.ts";
-import { LoginPage, RegisterPage } from "./pages/AuthPages.tsx";
+import {
+  ForgotPasswordPage,
+  LoginPage,
+  RegisterPage,
+  ResetPasswordPage,
+} from "./pages/AuthPages.tsx";
 import { HomePage } from "./pages/HomePage.tsx";
 import { NotFoundPage } from "./pages/NotFoundPage.tsx";
 import { UserDetailPage } from "./pages/UserDetailPage.tsx";
@@ -101,6 +106,8 @@ export function AppLayout() {
           <Route path="/" component={HomePage} />
           <Route path="/register" component={RegisterPage} />
           <Route path="/login" component={LoginPage} />
+          <Route path="/forgot-password" component={ForgotPasswordPage} />
+          <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/users" component={UsersPage} />
           <Route path="/users/:id" component={UserDetailPage} />
           <Route path="/assets" component={AssetsPage} />

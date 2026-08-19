@@ -31,7 +31,7 @@ L'idea: darti una base full stack Bun pronta all'uso, con il minimo livello di a
 
 ## Prerequisiti
 
-- Bun (consigliato `>= 1.3.x`)
+- Bun `>= 1.3.14`
 - PostgreSQL
 
 ## Quickstart
@@ -52,6 +52,8 @@ Imposta almeno:
 
 - `DATABASE_URL`
 - `PORT` (opzionale, default 3000)
+
+Per abilitare il reset password via email configura anche `APP_URL`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL` e, opzionalmente, `MAIL_FROM_NAME` come mostrato in `.env.example`.
 
 3. Esegui migrazioni
 
@@ -146,6 +148,7 @@ registerClassRoutes(app, User);
 - `@RequireAuth()` -> blocca richieste non autenticate (`401`)
 - `@RequireOwner(...)` -> accesso solo al proprietario (`403`)
 - Bypass admin: per default utenti con `role = "admin"` non hanno restrizioni owner
+- Il reset password invia via email un link monouso valido un'ora. Il token resta nel frammento URL e non viene inviato nella richiesta della pagina; la risposta REST non lo include mai e non rivela se l'indirizzo esiste. Nel database viene conservato solo l'hash SHA-256. Il completamento del reset revoca sessioni e API token esistenti.
 - Lista utenti:
   - utente normale: vede solo sé stesso
   - admin: vede tutti gli utenti

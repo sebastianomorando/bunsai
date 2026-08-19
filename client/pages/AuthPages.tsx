@@ -1,5 +1,5 @@
 import { useLocation } from "preact-iso";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { apiRequest, fetchUsers } from "../api.ts";
 import { t } from "../i18n.ts";
 import {
@@ -130,6 +130,134 @@ export function LoginPage() {
       </label>
       <button class="button" type="submit" disabled={pendingState.value}>
         {pendingState.value ? t("login.submitLoading") : t("login.submit")}
+      </button>
+      <a href="/forgot-password">{t("passwordReset.forgotLink")}</a>
+    </form>
+  );
+}
+
+export function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+
+  const onSubmit = async (event: Event) => {
+    event.preventDefault();
+    setNotice(null);
+    setError(null);
+    pendingState.value = true;
+
+    try {
+      await apiRequest("/api/password-reset/request", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      setNotice(t("passwordReset.requestSuccess"));
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      pendingState.value = false;
+    }
+  };
+
+  return (
+    <form class="panel form" onSubmit={onSubmit}>
+      <h2>{t("passwordReset.requestTitle")}</h2>
+      <p>{t("passwordReset.requestDescription")}</p>
+      <label>
+        {t("field.email")}
+        <input
+          type="email"
+          autoComplete="email"
+          value={email}
+          onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
+          required
+        />
+      </label>
+      <button class="button" type="submit" disabled={pendingState.value}>
+        {pendingState.value ? t("passwordReset.sending") : t("passwordReset.send")}
+      </button>
+    </form>
+  );
+}
+
+export function ResetPasswordPage() {
+  const { route } = useLocation();
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [token] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.hash.slice(1)).get("token") || ""
+  );
+
+  useEffect(() => {
+    if (token && typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [token]);
+
+  const onSubmit = async (event: Event) => {
+    event.preventDefault();
+    setNotice(null);
+    setError(null);
+    if (newPassword !== confirmPassword) {
+      setError(t("passwordReset.passwordMismatch"));
+      return;
+    }
+
+    pendingState.value = true;
+    try {
+      await apiRequest("/api/password-reset", {
+        method: "POST",
+        body: JSON.stringify({ token, newPassword }),
+      });
+      setNotice(t("passwordReset.resetSuccess"));
+      route("/login");
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      pendingState.value = false;
+    }
+  };
+
+  if (!token) {
+    return (
+      <section class="panel">
+        <h2>{t("passwordReset.invalidTitle")}</h2>
+        <p>{t("passwordReset.invalidDescription")}</p>
+        <a class="button" href="/forgot-password">{t("passwordReset.requestAgain")}</a>
+      </section>
+    );
+  }
+
+  return (
+    <form class="panel form" onSubmit={onSubmit}>
+      <h2>{t("passwordReset.resetTitle")}</h2>
+      <label>
+        {t("passwordReset.newPassword")}
+        <input
+          type="password"
+          minLength={8}
+          maxLength={1024}
+          autoComplete="new-password"
+          value={newPassword}
+          onInput={(event) => setNewPassword((event.target as HTMLInputElement).value)}
+          required
+        />
+      </label>
+      <label>
+        {t("passwordReset.confirmPassword")}
+        <input
+          type="password"
+          minLength={8}
+          maxLength={1024}
+          autoComplete="new-password"
+          value={confirmPassword}
+          onInput={(event) => setConfirmPassword((event.target as HTMLInputElement).value)}
+          required
+        />
+      </label>
+      <button class="button" type="submit" disabled={pendingState.value}>
+        {pendingState.value ? t("passwordReset.resetting") : t("passwordReset.reset")}
       </button>
     </form>
   );

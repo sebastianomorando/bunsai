@@ -20,6 +20,13 @@ import {
   NotFoundError,
   ValidationError,
 } from "../server/errors";
+import {
+  createPasswordResetToken,
+  hashPasswordResetToken,
+  PASSWORD_RESET_REQUEST_MESSAGE,
+  PASSWORD_RESET_TTL_MS,
+  sendPasswordResetEmail,
+} from "../server/passwordReset";
 
 export type UserRole = "user" | "admin";
 
@@ -571,45 +578,96 @@ class User {
 
   @Route("POST", "/api/password-reset/request")
   @Args(BodyField("email"))
-  static async requestPasswordReset(email: string): Promise<string> {
-    const rows = await sql`SELECT id FROM users WHERE email = ${email}`;
-    if (rows.length === 0) {
-      throw new NotFoundError("Utente non trovato");
+  static async requestPasswordReset(email: string): Promise<{ message: string }> {
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) || normalizedEmail.length > 255) {
+      throw new ValidationError("Email non valida");
     }
 
-    const token = Bun.randomUUIDv7();
-    await sql`INSERT INTO password_resets ${sql({
-      id: Bun.randomUUIDv7(),
-      user_id: rows[0]!.id,
-      token,
-      expires_at: new Date(Date.now() + 1000 * 60 * 60),
-      created_at: new Date(),
-    })}`;
+    const rows = await sql`SELECT id FROM users WHERE LOWER(email) = ${normalizedEmail}`;
+    if (rows.length === 0) {
+      return { message: PASSWORD_RESET_REQUEST_MESSAGE };
+    }
 
-    return token;
+    const userId = String(rows[0]!.id);
+    const cooldown = new Date(Date.now() - 60 * 1000);
+    const recent = await sql`SELECT id FROM password_resets WHERE user_id = ${userId} AND created_at > ${cooldown} LIMIT 1`;
+    if (recent.length > 0) {
+      return { message: PASSWORD_RESET_REQUEST_MESSAGE };
+    }
+
+    const token = createPasswordResetToken();
+    const tokenHash = hashPasswordResetToken(token);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+    const createdAt = new Date();
+
+    await sql.begin(async (tx) => {
+      await tx`DELETE FROM password_resets WHERE user_id = ${userId}`;
+      await tx`
+        INSERT INTO password_resets (id, user_id, token, expires_at, created_at)
+        VALUES (${Bun.randomUUIDv7()}, ${userId}, ${tokenHash}, ${expiresAt}, ${createdAt})
+      `;
+    });
+
+    void sendPasswordResetEmail(normalizedEmail, token).catch(async (error) => {
+      console.error(
+        "Invio email di reset password fallito:",
+        error instanceof Error ? error.message : "errore sconosciuto"
+      );
+      try {
+        await sql`DELETE FROM password_resets WHERE token = ${tokenHash}`;
+      } catch (cleanupError) {
+        console.error("Pulizia token di reset password fallita", cleanupError);
+      }
+    });
+
+    return { message: PASSWORD_RESET_REQUEST_MESSAGE };
   }
 
   @Route("POST", "/api/password-reset")
   @Args(BodyField("token"), BodyField("newPassword"))
-  static async resetPassword(token: string, newPassword: string): Promise<void> {
-    const rows = await sql`SELECT * FROM password_resets WHERE token = ${token}`;
+  static async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    if (typeof token !== "string" || token.length < 32 || token.length > 512) {
+      throw new NotAuthorizedError("Token non valido o scaduto");
+    }
+    if (typeof newPassword !== "string" || newPassword.length < 8 || newPassword.length > 1024) {
+      throw new ValidationError("La password deve contenere almeno 8 caratteri");
+    }
+
+    const tokenHash = hashPasswordResetToken(token);
+    const now = new Date();
+    const rows = await sql`
+      SELECT id
+      FROM password_resets
+      WHERE token = ${tokenHash} AND expires_at > ${now}
+      LIMIT 1
+    `;
     if (rows.length === 0) {
       throw new NotAuthorizedError("Token non valido o scaduto");
     }
 
-    const reset = rows[0] as {
-      id: string;
-      user_id: string;
-      expires_at: Date;
-    };
-
-    if (new Date(reset.expires_at).getTime() < Date.now()) {
-      throw new NotAuthorizedError("Token non valido o scaduto");
-    }
-
     const passwordHash = await Bun.password.hash(newPassword);
-    await sql`UPDATE users SET password = ${passwordHash}, date_updated = ${new Date()} WHERE id = ${reset.user_id}`;
-    await sql`DELETE FROM password_resets WHERE id = ${reset.id}`;
+    await sql.begin(async (tx) => {
+      const resets = await tx`
+        DELETE FROM password_resets
+        WHERE id = ${rows[0]!.id} AND token = ${tokenHash} AND expires_at > ${new Date()}
+        RETURNING user_id
+      `;
+      if (resets.length === 0) {
+        throw new NotAuthorizedError("Token non valido o scaduto");
+      }
+
+      const userId = String(resets[0]!.user_id);
+      await tx`
+        UPDATE users
+        SET password = ${passwordHash}, api_token = NULL, date_updated = ${new Date()}
+        WHERE id = ${userId}
+      `;
+      await tx`DELETE FROM sessions WHERE user_id = ${userId}`;
+      await tx`DELETE FROM password_resets WHERE user_id = ${userId}`;
+    });
+
+    return { message: "Password aggiornata" };
   }
 }
 
