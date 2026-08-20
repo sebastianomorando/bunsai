@@ -1,5 +1,9 @@
 # Bunsai
 
+<p align="center">
+  <img src="./client/assets/bunsai-logo.png" alt="Bunsai logo" width="180">
+</p>
+
 `Bunsai` is not meant to be a framework you install, but a **repository you clone and hack**.
 
 The idea is to give you a full-stack Bun baseline that is ready to run, with the thinnest possible abstraction over Bun’s native APIs, so you can adapt it to your real needs without fighting heavy conventions.
@@ -19,6 +23,7 @@ The idea is to give you a full-stack Bun baseline that is ready to run, with the
 - Advanced decorator system:
   - argument binding (`@Args`, `Param`, `Body`, `Query`, ...)
   - auth/ownership/roles (`@RequireAuth`, `@RequireOwner`, `@RequireRole`)
+  - shared rate limiting (`@RateLimit`)
   - serialization (`@Serialize`)
   - typed HTTP error mapping
 - Example auth with cookie-based sessions
@@ -27,11 +32,11 @@ The idea is to give you a full-stack Bun baseline that is ready to run, with the
   - `@preact/signals`
   - `preact-iso` (client-side routing)
 - SQL migrations (`migrations/*.sql`) + runner (`migrate.ts`)
-- Utility CLI (`cli/user.ts`)
+- Utility CLIs for users and maintenance (`cli/*`)
 
 ## Prerequisites
 
-- Bun `>= 1.3.14`
+- Bun `>= 1.4.0`
 - PostgreSQL
 
 ## Quickstart
@@ -51,23 +56,28 @@ cp .env.example .env
 Set at least:
 
 - `DATABASE_URL`
-- `PORT` (optional, default 3000)
+- `APP_URL`, used to build public email links
+- `RATE_LIMIT_SECRET` with at least 32 characters in production
 
-Email confirmation and password reset require `APP_URL`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL`, and optionally `MAIL_FROM_NAME` as shown in `.env.example`. Behind Caddy, set `APP_URL` to the public `https://` origin: session cookies will then receive the `Secure` attribute even if Caddy talks to Bun over HTTP.
+`PORT` is optional: the application defaults to `3000`, while `.env.example` explicitly selects `3030`. The HTTP examples below follow `.env.example`.
+
+Email confirmation and password reset require `MAIL_SERVER` and `MAIL_FROM_EMAIL`; port, TLS mode, credentials, and sender name are configurable as shown in `.env.example`. `MAIL_USERNAME` and `MAIL_PASSWORD` are needed only when the SMTP server requires authentication. Behind Caddy, set `APP_URL` to the public `https://` origin: session cookies will then receive the `Secure` attribute even if Caddy talks to Bun over HTTP.
 
 3. Run migrations
 
 ```bash
-bun run migrate.ts
+bun run migrate
 ```
 
 4. (Optional) Seed demo users
 
 ```bash
-bun run seed.ts
+bun run seed
 ```
 
 This creates 50 users total (49 regular + 1 admin) and can be re-run safely.
+
+The seed restores known demo credentials on every run. Never execute it in production or in an environment exposed to untrusted users.
 
 - Admin: `admin` / `admin123!`
 - Demo user: `user001` / `user123!`
@@ -75,7 +85,7 @@ This creates 50 users total (49 regular + 1 admin) and can be re-run safely.
 5. Start the app
 
 ```bash
-bun run index.ts
+bun run start
 ```
 
 ## Bootstrap with `bun create` (optional)
@@ -84,19 +94,20 @@ bun run index.ts
 bun create sebastianomorando/bunsai my-bunsai-app
 cd my-bunsai-app
 cp .env.example .env
-bun run migrate.ts
-bun run index.ts
+bun run migrate
+bun run start
 ```
 
 ## Structure (high-level)
 
 ```txt
 client/        # Preact frontend + signals + preact-iso
-entities/      # Domain/models (User, Session) with business logic
+entities/      # Domain/models (User, Session, Asset) with business logic
 server/        # Server app, decorators, error handling
 lib/           # Bundana (thin HTTP layer over Bun)
 migrations/    # SQL migrations
-cli/           # Utility commands (create/reset users)
+cli/           # User administration and maintenance commands
+data/          # Local asset and transformed-image cache storage
 index.ts       # Application entry point
 migrate.ts     # Migration runner
 seed.ts        # Demo data seeder (50 users incl. admin)
@@ -111,6 +122,10 @@ import app from "./server/app";
 
 app.get("/health", () => Response.json({ ok: true }));
 app.post("/echo", async (req) => Response.json(await req.json()));
+
+// Serve ./public through Bun's native directory route.
+// The route must end with /*.
+app.static("/static/*", { dir: "./public" });
 ```
 
 ### 2) Decorator-based on classes/entities
@@ -155,26 +170,32 @@ Example flow with cookie jar:
 
 ```bash
 # Register
-curl -i -X POST http://localhost:3000/api/register \
+curl -i -X POST http://localhost:3030/api/register \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","email":"alice@example.com","password":"secret123"}'
 
 # Open the confirmation link received by email before logging in
 
 # Login (save cookie)
-curl -i -c cookie.txt -X POST http://localhost:3000/api/login \
+curl -i -c cookie.txt -X POST http://localhost:3030/api/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"secret123"}'
 
 # Users list (authenticated, paginated + sortable)
-curl -i -b cookie.txt "http://localhost:3000/api/users?page=1&limit=10&sortBy=date_created&sortDir=desc"
+curl -i -b cookie.txt "http://localhost:3030/api/users?page=1&limit=10&sortBy=date_created&sortDir=desc"
 
 # User detail
-curl -i -b cookie.txt http://localhost:3000/api/users/<user-id>
+curl -i -b cookie.txt http://localhost:3030/api/users/<user-id>
 
 # Logout
-curl -i -b cookie.txt -X POST http://localhost:3000/api/logout
+curl -i -b cookie.txt -X POST http://localhost:3030/api/logout
 ```
+
+`GET /api/users` supports pagination and ordering:
+
+- `page`, `limit` (default `1`/`10`, max `100`)
+- `sortBy`: `date_created`, `username`, `email`, `role`, `is_active`
+- `sortDir`: `asc`, `desc`
 
 ## Asset API
 
@@ -183,17 +204,17 @@ Assets are stored outside the database (under `data/assets` by default), while m
 ```bash
 # Upload
 curl -b cookie.txt -F 'file=@photo.jpg' -F 'title=Hero' \
-  http://localhost:3000/api/assets
+  http://localhost:3030/api/assets
 
 # Original
-curl http://localhost:3000/assets/<asset-id> -o photo.jpg
+curl http://localhost:3030/assets/<asset-id> -o photo.jpg
 
 # On-demand transform (generated once, then served from the disk cache)
-curl 'http://localhost:3000/assets/<asset-id>?width=800&height=600&fit=inside&format=webp&quality=80' \
+curl 'http://localhost:3030/assets/<asset-id>?width=800&height=600&fit=inside&format=webp&quality=80' \
   -o photo.webp
 
 # Built-in preset
-curl 'http://localhost:3000/assets/<asset-id>?key=system-medium-contain' -o thumbnail
+curl 'http://localhost:3030/assets/<asset-id>?key=system-medium-contain' -o thumbnail
 ```
 
 Supported query parameters are `width`, `height`, `quality`, `format` (`auto`, `jpg`, `png`, `webp`), `fit` (`inside`, `contain`, `fill`), `withoutEnlargement`, `rotate`, `flip`, `flop`, `brightness`, and `saturation`. Geometry is intentionally limited to Bun's native `fill` and `inside` modes; true crop/letterbox modes are not emulated with another image library.
@@ -206,11 +227,6 @@ Behind Caddy, `X-Forwarded-For` is accepted only when it contains one valid IP a
 
 If another proxy or CDN sits in front of Caddy, configure Caddy's global `trusted_proxies` and `trusted_proxies_strict` options, normalize the upstream header with `header_up X-Forwarded-For {client_ip}`, and add only the address from which Caddy reaches Bunsai to `TRUSTED_PROXY_IPS`. Without normalization, Bunsai safely groups the chain under the Caddy peer address.
 
-`GET /api/users` supports pagination and ordering:
-- `page`, `limit` (default `1`/`10`, max `100`)
-- `sortBy`: `date_created`, `username`, `email`, `role`, `is_active`
-- `sortDir`: `asc`, `desc`
-
 ## Frontend
 
 Frontend lives in `client/` and is already configured for:
@@ -221,11 +237,16 @@ Frontend lives in `client/` and is already configured for:
 
 Included pages:
 
+- `/`
 - `/register`
+- `/forgot-password`
+- `/reset-password`
 - `/confirm-email`
 - `/login`
 - `/users`
 - `/users/:id`
+- `/assets`
+- `/profile`
 
 ## CLI
 
@@ -250,8 +271,10 @@ bun run maintenance:install -- "0 3 * * *"
 bun run maintenance:remove
 
 # Seed demo users (49 user + 1 admin)
-bun run seed.ts
+bun run seed
 ```
+
+`create` uses the regular registration flow: it requires the mail configuration and creates an inactive user who must confirm their email. Use `activate` when an administrator needs to activate the account directly.
 
 The server does not start this job automatically, preventing multiple replicas from registering competing copies. Installation uses the operating system scheduler and is idempotent for the current user. The scheduled process must receive `DATABASE_URL` from its own environment; system schedulers do not necessarily inherit variables from the web service.
 
@@ -290,4 +313,5 @@ No lock-in: the code is yours, and you can change naming, conventions, security 
 
 - Decorators: `server/DECORATORS.md`
 - HTTP error handling: `server/ERRORS.md`
+- Security audit and residual risks: `SECURITY_AUDIT.md`
 - Coding agent instructions: `AGENTS.md`

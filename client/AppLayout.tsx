@@ -15,6 +15,7 @@ import { UserDetailPage } from "./pages/UserDetailPage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
 import { AssetsPage } from "./pages/AssetsPage.tsx";
 import { ProfilePage } from "./pages/ProfilePage.tsx";
+import logo from "./assets/bunsai-logo.png";
 import {
   errorMessage,
   errorState,
@@ -63,7 +64,8 @@ export function AppLayout() {
     <main class="page">
       <header class="topbar">
         <a class="brand" href="/">
-          {t("brand.title")}
+          <img class="brand-logo" src={logo} alt="" width="46" height="46" />
+          <span>{t("brand.title")}</span>
         </a>
         <nav class="menu">
           <label class="langswitch">

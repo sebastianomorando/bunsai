@@ -46,11 +46,22 @@ body {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   color: var(--ink);
   text-decoration: none;
   font-weight: 700;
   letter-spacing: 0.02em;
   font-size: clamp(1.1rem, 2vw, 1.35rem);
+}
+
+.brand-logo {
+  display: block;
+  width: 2.9rem;
+  height: 2.9rem;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .menu {

@@ -1,5 +1,9 @@
 # Bunsai
 
+<p align="center">
+  <img src="./client/assets/bunsai-logo.png" alt="Logo di Bunsai" width="180">
+</p>
+
 `Bunsai` non nasce come framework da installare, ma come **repo da clonare e hackerare**.
 
 L'idea: darti una base full stack Bun pronta all'uso, con il minimo livello di astrazione possibile sulle API native di Bun, così puoi piegarla alle tue esigenze senza combattere contro convenzioni rigide.
@@ -19,6 +23,7 @@ L'idea: darti una base full stack Bun pronta all'uso, con il minimo livello di a
 - Sistema decorators avanzato:
   - binding argomenti (`@Args`, `Param`, `Body`, `Query`, ...)
   - auth/ownership/ruoli (`@RequireAuth`, `@RequireOwner`, `@RequireRole`)
+  - rate limit condiviso (`@RateLimit`)
   - serializzazione (`@Serialize`)
   - mapping errori HTTP tipizzati
 - Auth di esempio con sessioni cookie-based
@@ -27,11 +32,11 @@ L'idea: darti una base full stack Bun pronta all'uso, con il minimo livello di a
   - `@preact/signals`
   - `preact-iso` (routing client-side)
 - Migrazioni SQL (`migrations/*.sql`) + runner (`migrate.ts`)
-- CLI di utilità (`cli/user.ts`)
+- CLI per gestione utenti e manutenzione (`cli/*`)
 
 ## Prerequisiti
 
-- Bun `>= 1.3.14`
+- Bun `>= 1.4.0`
 - PostgreSQL
 
 ## Quickstart
@@ -51,23 +56,28 @@ cp .env.example .env
 Imposta almeno:
 
 - `DATABASE_URL`
-- `PORT` (opzionale, default 3000)
+- `APP_URL`, usato per costruire i link pubblici inviati via email
+- `RATE_LIMIT_SECRET` di almeno 32 caratteri in produzione
 
-Conferma email e reset password richiedono `APP_URL`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL` e, opzionalmente, `MAIL_FROM_NAME` come mostrato in `.env.example`. Dietro Caddy imposta `APP_URL` all’origine pubblica `https://`: il cookie di sessione riceverà `Secure` anche se Caddy comunica con Bun via HTTP.
+`PORT` è opzionale: l’applicazione usa `3000` in assenza della variabile, mentre `.env.example` seleziona esplicitamente `3030`. Gli esempi HTTP seguenti usano il valore di `.env.example`.
+
+Conferma email e reset password richiedono `MAIL_SERVER` e `MAIL_FROM_EMAIL`; porta, modalità TLS, credenziali e nome del mittente sono configurabili come mostrato in `.env.example`. `MAIL_USERNAME` e `MAIL_PASSWORD` servono soltanto se il server SMTP richiede autenticazione. Dietro Caddy imposta `APP_URL` all’origine pubblica `https://`: il cookie di sessione riceverà `Secure` anche se Caddy comunica con Bun via HTTP.
 
 3. Esegui migrazioni
 
 ```bash
-bun run migrate.ts
+bun run migrate
 ```
 
 4. (Opzionale) Seed utenti demo
 
 ```bash
-bun run seed.ts
+bun run seed
 ```
 
 Questo crea 50 utenti totali (49 standard + 1 admin) ed è rilanciabile senza problemi.
+
+Il seed ripristina credenziali demo note a ogni esecuzione. Non eseguirlo mai in produzione o in un ambiente esposto a utenti non fidati.
 
 - Admin: `admin` / `admin123!`
 - Utente demo: `user001` / `user123!`
@@ -75,7 +85,7 @@ Questo crea 50 utenti totali (49 standard + 1 admin) ed è rilanciabile senza pr
 5. Avvia app
 
 ```bash
-bun run index.ts
+bun run start
 ```
 
 ## Bootstrap con `bun create` (opzionale)
@@ -83,16 +93,15 @@ bun run index.ts
 Se vuoi partire direttamente da un template/repo usando Bun:
 
 ```bash
-bun create <github-user>/<repo> my-bunsai-app
+bun create sebastianomorando/bunsai my-bunsai-app
 cd my-bunsai-app
 cp .env.example .env
-bun run migrate.ts
-bun run index.ts
+bun run migrate
+bun run start
 ```
 
 Note:
 
-- Sostituisci `<github-user>/<repo>` con il repository reale.
 - `bun create` può installare automaticamente le dipendenze e inizializzare la cartella progetto.
 - Riferimento ufficiale: https://bun.com/docs/runtime/templating/create
 
@@ -100,11 +109,12 @@ Note:
 
 ```txt
 client/        # Frontend Preact + signals + preact-iso
-entities/      # Dominio/model (User, Session) con business logic
+entities/      # Dominio/model (User, Session, Asset) con business logic
 server/        # App server, decorators, error handling
 lib/           # Bundana (layer HTTP sottile sopra Bun)
 migrations/    # SQL migrations
-cli/           # Comandi utili (creazione/reset utenti)
+cli/           # Comandi per gestione utenti e manutenzione
+data/          # Storage locale di asset e cache delle trasformazioni
 index.ts       # Entry point applicazione
 migrate.ts     # Migration runner
 seed.ts        # Seeder dati demo (50 utenti incluso admin)
@@ -119,6 +129,10 @@ import app from "./server/app";
 
 app.get("/health", () => Response.json({ ok: true }));
 app.post("/echo", async (req) => Response.json(await req.json()));
+
+// Serve ./public tramite la directory route nativa di Bun.
+// Il percorso della route deve terminare con /*.
+app.static("/static/*", { dir: "./public" });
 ```
 
 ### 2) Decorator-based su classi/entity
@@ -163,25 +177,25 @@ Esempio flusso con cookie jar:
 
 ```bash
 # Register
-curl -i -X POST http://localhost:3000/api/register \
+curl -i -X POST http://localhost:3030/api/register \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","email":"alice@example.com","password":"secret123"}'
 
 # Apri il link di conferma ricevuto via email prima del login
 
 # Login (salva cookie)
-curl -i -c cookie.txt -X POST http://localhost:3000/api/login \
+curl -i -c cookie.txt -X POST http://localhost:3030/api/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"secret123"}'
 
 # Lista utenti (autenticato, paginata + ordinabile)
-curl -i -b cookie.txt "http://localhost:3000/api/users?page=1&limit=10&sortBy=date_created&sortDir=desc"
+curl -i -b cookie.txt "http://localhost:3030/api/users?page=1&limit=10&sortBy=date_created&sortDir=desc"
 
 # Dettaglio utente
-curl -i -b cookie.txt http://localhost:3000/api/users/<user-id>
+curl -i -b cookie.txt http://localhost:3030/api/users/<user-id>
 
 # Logout
-curl -i -b cookie.txt -X POST http://localhost:3000/api/logout
+curl -i -b cookie.txt -X POST http://localhost:3030/api/logout
 ```
 
 `GET /api/users` supporta paginazione e ordinamento:
@@ -211,11 +225,16 @@ Il frontend è in `client/` ed è già configurato per:
 
 Pagine incluse:
 
+- `/`
 - `/register`
+- `/forgot-password`
+- `/reset-password`
 - `/confirm-email`
 - `/login`
 - `/users`
 - `/users/:id`
+- `/assets`
+- `/profile`
 
 ## CLI
 
@@ -240,8 +259,10 @@ bun run maintenance:install -- "0 3 * * *"
 bun run maintenance:remove
 
 # Seed utenti demo (49 user + 1 admin)
-bun run seed.ts
+bun run seed
 ```
+
+`create` usa lo stesso flusso della registrazione: richiede la configurazione mail e crea un utente inattivo che deve confermare l’indirizzo email. Usa `activate` quando un amministratore deve attivare direttamente l’account.
 
 Il job non viene avviato automaticamente dal server: in questo modo più repliche non registrano copie concorrenti. L’installazione usa il task scheduler del sistema operativo ed è idempotente per l’utente corrente. Il processo schedulato deve ricevere `DATABASE_URL` dal proprio ambiente; i cron di sistema non ereditano necessariamente le variabili del servizio web.
 
@@ -280,4 +301,5 @@ Nessun lock-in: il codice è tuo, puoi cambiare naming, convenzioni, sicurezza, 
 
 - Decorators: `server/DECORATORS.md`
 - Error handling HTTP: `server/ERRORS.md`
+- Audit di sicurezza e rischi residui: `SECURITY_AUDIT.md`
 - Istruzioni coding agents: `AGENTS.md`

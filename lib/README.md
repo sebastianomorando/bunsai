@@ -16,6 +16,8 @@ Bundana 🧣 — a lightweight express-style layer for Bun
 
 ## Installation
 
+Requires Bun `>= 1.4.0`.
+
 ```bash
 bun add bundana
 ```
