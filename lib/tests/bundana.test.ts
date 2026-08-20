@@ -129,6 +129,19 @@ describe("Bundana", () => {
             expect(res.status).toBe(200);
             expect(await res.text()).toBe("Added");
         });
+
+        it("should infer and expose parameters from literal route paths", async () => {
+            app.get("/users/:id", (req) => {
+                const id: string = req.params.id;
+                // @ts-expect-error Bun 1.4 infers that only `id` exists on this route.
+                void req.params.missing;
+                return Response.json({ id });
+            });
+            startServer();
+
+            const res = await fetch(`http://localhost:${port}/users/user-42`);
+            expect(await res.json()).toEqual({ id: "user-42" });
+        });
     });
 
     describe("Middleware", () => {

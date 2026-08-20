@@ -144,6 +144,7 @@ registerClassRoutes(app, User);
 - Registration sends a 24-hour email confirmation link. Only the token hash is stored and inactive users cannot log in.
 - Admins can activate/deactivate users from the dashboard; deactivation revokes sessions and API tokens.
 - Password reset sends a one-hour, single-use link by email. The token stays in the URL fragment so it is not sent in the page request; the REST response never includes it and does not reveal whether the address exists. Only the SHA-256 token hash is stored. Completing a reset revokes existing sessions and API tokens.
+- Login, registration, email confirmation, and both password-reset phases use shared PostgreSQL rate limits by IP and identifier. Keys are pseudonymized with HMAC and limited responses include `Retry-After`.
 - User listing:
   - normal user: sees only themselves
   - admin: sees all users
@@ -197,7 +198,13 @@ curl 'http://localhost:3000/assets/<asset-id>?key=system-medium-contain' -o thum
 
 Supported query parameters are `width`, `height`, `quality`, `format` (`auto`, `jpg`, `png`, `webp`), `fit` (`inside`, `contain`, `fill`), `withoutEnlargement`, `rotate`, `flip`, `flop`, `brightness`, and `saturation`. Geometry is intentionally limited to Bun's native `fill` and `inside` modes; true crop/letterbox modes are not emulated with another image library.
 
-Optional environment variables: `ASSETS_DIR`, `ASSET_CACHE_DIR`, `MAX_ASSET_BYTES`, `MAX_IMAGE_PIXELS`, and `MAX_TRANSFORM_DIMENSION`.
+Only cache misses consume the image-transform rate limit. Cached variants use LRU eviction with a 512 MiB global quota, at most 10,000 cache files, at most 20 variants per asset, and at most two concurrent transformations per process. The maintenance job removes expired rate-limit records and variants beyond quota.
+
+Optional environment variables include `ASSETS_DIR`, `ASSET_CACHE_DIR`, `MAX_ASSET_BYTES`, `MAX_IMAGE_PIXELS`, `MAX_TRANSFORM_DIMENSION`, `RATE_LIMIT_IMAGE_TRANSFORM_MAX`, `MAX_ASSET_CACHE_BYTES`, `MAX_ASSET_CACHE_FILES`, `MAX_ASSET_CACHE_VARIANTS_PER_ASSET`, and `MAX_CONCURRENT_IMAGE_TRANSFORMS`; see `.env.example` for the complete list.
+
+Behind Caddy, `X-Forwarded-For` is accepted only when it contains one valid IP and the peer address is listed in `TRUSTED_PROXY_IPS`; the default permits same-host Caddy. `RATE_LIMIT_SECRET` is required in production and must be shared by every application replica.
+
+If another proxy or CDN sits in front of Caddy, configure Caddy's global `trusted_proxies` and `trusted_proxies_strict` options, normalize the upstream header with `header_up X-Forwarded-For {client_ip}`, and add only the address from which Caddy reaches Bunsai to `TRUSTED_PROXY_IPS`. Without normalization, Bunsai safely groups the chain under the Caddy peer address.
 
 `GET /api/users` supports pagination and ordering:
 - `page`, `limit` (default `1`/`10`, max `100`)
@@ -234,8 +241,39 @@ bun run cli/user.ts reset-password <username|email>
 # Activate a user (username or email)
 bun run cli/user.ts activate <username|email>
 
+# Run expired session and token cleanup once
+bun run maintenance
+
+# Install/remove the OS-level Bun.cron job (default schedule: @hourly)
+bun run maintenance:install
+bun run maintenance:install -- "0 3 * * *"
+bun run maintenance:remove
+
 # Seed demo users (49 user + 1 admin)
 bun run seed.ts
+```
+
+The server does not start this job automatically, preventing multiple replicas from registering competing copies. Installation uses the operating system scheduler and is idempotent for the current user. The scheduled process must receive `DATABASE_URL` from its own environment; system schedulers do not necessarily inherit variables from the web service.
+
+## Bun 1.4 checks and diagnostics
+
+```bash
+# Isolated parallel suite; test:serial remains available for debugging
+bun run test
+bun run test:changed
+bun run test:serial
+
+# Dependencies and licenses
+bun run audit
+bun run deps:check
+bun run licenses
+
+# Markdown profiles for terminal or automated analysis
+bun --cpu-prof-md index.ts
+bun --heap-prof-md index.ts
+
+# Inspect a bundle without changing the application's runtime path
+bun build ./client/index.html --outdir ./dist --target browser --metafile-md=./dist/metafile.md
 ```
 
 ## Technical goal

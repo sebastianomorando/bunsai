@@ -6,11 +6,12 @@ export type ErrorLogContext = {
   handler?: string;
 };
 
-type HttpErrorOptions = {
+export type HttpErrorOptions = {
   code?: string;
   details?: ErrorDetails;
   expose?: boolean;
   cause?: unknown;
+  headers?: HeadersInit;
 };
 
 export class HttpError extends Error {
@@ -18,6 +19,7 @@ export class HttpError extends Error {
   code: string;
   details?: ErrorDetails;
   expose: boolean;
+  headers?: HeadersInit;
 
   constructor(status: number, message: string, options: HttpErrorOptions = {}) {
     super(message, options.cause ? { cause: options.cause } : undefined);
@@ -26,6 +28,7 @@ export class HttpError extends Error {
     this.code = options.code ?? "HTTP_ERROR";
     this.details = options.details;
     this.expose = options.expose ?? status < 500;
+    this.headers = options.headers;
   }
 }
 
@@ -71,6 +74,12 @@ export class RateLimitError extends HttpError {
   }
 }
 
+export class StorageQuotaError extends HttpError {
+  constructor(message = "Storage quota exceeded", options: HttpErrorOptions = {}) {
+    super(507, message, { code: "STORAGE_QUOTA_EXCEEDED", ...options });
+  }
+}
+
 export function isHttpError(error: unknown): error is HttpError {
   return error instanceof HttpError;
 }
@@ -81,6 +90,9 @@ function logError(error: unknown, context: ErrorLogContext = {}) {
   const prefix = [requestContext, routeContext].filter(Boolean).join(" | ");
 
   if (isHttpError(error)) {
+    if (error.status === 429) {
+      return;
+    }
     console.error(
       `[RouteError ${error.status} ${error.code}]${prefix ? ` ${prefix}` : ""} - ${error.message}`
     );
@@ -111,7 +123,7 @@ export function errorToResponse(
         code: error.code,
         ...(error.details ? { details: error.details } : {}),
       },
-      { status: error.status }
+      { status: error.status, headers: error.headers }
     );
   }
 

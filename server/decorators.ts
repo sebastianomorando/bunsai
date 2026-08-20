@@ -4,6 +4,11 @@ import {
   NotAuthenticatedError,
   NotAuthorizedError,
 } from "./errors";
+import {
+  enforceRateLimit,
+  enforceRequestRateLimit,
+  type RateLimitPolicyName,
+} from "./rateLimit";
 
 type RouteDef = {
   method: HttpMethod;
@@ -201,6 +206,24 @@ export function Serialize(serializer: SerializerBinder) {
 export function RequireAuth() {
   return Guard(async (req) => {
     await requireSession(req);
+  });
+}
+
+export function RateLimit(policy: RateLimitPolicyName, bodyField?: string) {
+  return Guard(async (req, server) => {
+    await enforceRequestRateLimit(policy, req, server);
+    let secondaryKey: string | undefined;
+    if (bodyField) {
+      const body = await readBody(req);
+      if (body && typeof body === "object") {
+        const value = (body as Record<string, unknown>)[bodyField];
+        if (typeof value === "string") secondaryKey = value;
+      }
+    }
+    const normalizedKey = secondaryKey?.trim().toLowerCase();
+    if (normalizedKey) {
+      await enforceRateLimit(policy, "key", normalizedKey);
+    }
   });
 }
 

@@ -4,7 +4,7 @@
   "description": "Thin full-stack Bun starter: backend, frontend (Preact), auth, migrations and CLI.",
   "module": "index.ts",
   "type": "module",
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sebastianomorando/bunsai.git"
@@ -26,7 +26,7 @@
     "auth"
   ],
   "engines": {
-    "bun": ">=1.3.14"
+    "bun": ">=1.4.0"
   },
   "license": "MIT",
   "scripts": {
@@ -34,9 +34,17 @@
     "start": "bun run index.ts",
     "migrate": "bun run migrate.ts",
     "seed": "bun run seed.ts",
+    "maintenance": "bun run cli/maintenance.ts run",
+    "maintenance:install": "bun run cli/maintenance.ts install",
+    "maintenance:remove": "bun run cli/maintenance.ts remove",
     "typecheck": "bunx tsc --noEmit",
-    "test": "bun test",
-    "test:decorators": "bun test server/decorators.test.ts"
+    "test": "bun test --parallel=4",
+    "test:serial": "bun test",
+    "test:changed": "bun test --changed",
+    "test:decorators": "bun test server/decorators.test.ts",
+    "audit": "bun audit",
+    "deps:check": "bun dedupe --check",
+    "licenses": "bun pm licenses"
   },
   "bun-create": {
     "preinstall": "echo \"Initializing Bunsai template...\"",
@@ -47,8 +55,8 @@
     "start": "bun run dev"
   },
   "devDependencies": {
-    "@types/bun": "1.3.14",
-    "@types/nodemailer": "^7.0.9"
+    "@types/bun": "1.4.0",
+    "@types/nodemailer": "^7.0.12"
   },
   "peerDependencies": {
     "typescript": "^5.9.3"

@@ -7,6 +7,7 @@ import {
   BodyField,
   Param,
   Query,
+  RateLimit,
   Req,
   RequireAuth,
   RequireOwner,
@@ -441,6 +442,7 @@ class User {
   }
 
   @Route("POST", "/api/register")
+  @RateLimit("register", "email")
   @Serialize(serializeUserPayload)
   @Args(Body())
   static async register(input: RegisterInput): Promise<User> {
@@ -499,6 +501,7 @@ class User {
   }
 
   @Route("POST", "/api/login")
+  @RateLimit("login", "username")
   @Serialize(serializeSessionPayload)
   @Args(Body(), Req())
   static async login(input: LoginInput, req?: Bun.BunRequest): Promise<Session> {
@@ -720,6 +723,7 @@ class User {
   }
 
   @Route("POST", "/api/email-confirmation")
+  @RateLimit("emailConfirmation", "token")
   @Args(BodyField("token"))
   static async confirmEmail(token: string): Promise<{ message: string }> {
     if (typeof token !== "string" || token.length < 32 || token.length > 512) {
@@ -746,6 +750,7 @@ class User {
   }
 
   @Route("POST", "/api/password-reset/request")
+  @RateLimit("passwordResetRequest", "email")
   @Args(BodyField("email"))
   static async requestPasswordReset(email: string): Promise<{ message: string }> {
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -794,6 +799,7 @@ class User {
   }
 
   @Route("POST", "/api/password-reset")
+  @RateLimit("passwordReset", "token")
   @Args(BodyField("token"), BodyField("newPassword"))
   static async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
     if (typeof token !== "string" || token.length < 32 || token.length > 512) {

@@ -32,6 +32,7 @@ const apiCodeTranslations = {
   CONFLICT: "error.conflict",
   VALIDATION_ERROR: "error.validation",
   RATE_LIMITED: "error.rateLimited",
+  STORAGE_QUOTA_EXCEEDED: "error.storageQuota",
   INTERNAL_SERVER_ERROR: "error.internal",
   HTTP_ERROR: "error.genericHttp",
 } as const satisfies Record<string, TranslationKey>;

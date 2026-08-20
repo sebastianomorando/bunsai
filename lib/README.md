@@ -12,7 +12,7 @@ Bundana 🧣 — a lightweight express-style layer for Bun
 - 🔌 **WebSocket support**: First-class WebSocket handler integration
 - 🔥 **Hot reload**: Add routes dynamically after server start
 - 🧩 **Plugin system**: Extend framework functionality with plugins
-- 🎯 **TypeScript**: Full TypeScript support with generics for WebSocket data
+- 🎯 **TypeScript**: Route parameters inferred from literal paths and generics for WebSocket data
 
 ## Installation
 
@@ -58,6 +58,7 @@ app.post("/users", async (req) => {
 
 // PATCH route
 app.patch("/users/:id", async (req) => {
+    // Bun.BunRequest<"/users/:id">: req.params.id is inferred as string
     const id = req.params.id;
     return Response.json({ updated: true, id });
 });

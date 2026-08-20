@@ -1,10 +1,47 @@
 # Security audit
 
-Data dell’audit: 19 agosto 2026.
+Data dell’audit: 21 agosto 2026.
 
 Questo documento riassume l’audit statico del repository e gli interventi applicati. Non sostituisce un penetration test sul deployment reale, che dipende anche dalla configurazione di Caddy, PostgreSQL, SMTP e sistema operativo.
 
 ## Interventi completati
+
+### Adozione di Bun 1.4
+
+- La versione minima, il package manager dichiarato e `@types/bun` sono allineati a Bun 1.4.
+- Le route usano direttamente `Bun.Serve.Routes` e `Bun.Serve.DirectoryRouteOptions`; i path letterali propagano i parametri tipizzati agli handler.
+- Le trasformazioni usano il tipo pubblico `Bun.Image` senza accessi tramite `any`, mantenendo `maxPixels`, limiti sulle dimensioni e validazione delle opzioni.
+- La suite predefinita usa processi paralleli isolati; resta disponibile una modalità seriale per il debug.
+- `bun audit`, `bun dedupe --check` e il riepilogo delle licenze sono esposti come script espliciti. `bun audit fix` non viene eseguito automaticamente perché modifica dipendenze e lockfile.
+
+### Manutenzione dei record di autenticazione
+
+- `bun run maintenance` elimina sessioni e richieste di reset scadute e azzera i token di attivazione scaduti.
+- Tutte le query hanno struttura statica e cutoff parametrizzato; nessun token, identificativo utente o segreto viene scritto nei log.
+- Le operazioni sono idempotenti e usano lo stesso timestamp per l’intera esecuzione, quindi un job interrotto può essere rilanciato.
+- Gli indici sulle scadenze di sessioni, reset password e token di attivazione evitano scansioni complete durante la pulizia periodica.
+- La schedule passata alla CLI ha caratteri e lunghezza limitati ed è validata anche dal parser di `Bun.cron`.
+- Il job non parte automaticamente con il server. `maintenance:install` registra una sola entry OS-level dal titolo fisso per l’utente corrente, evitando un job in-process per ogni replica applicativa.
+
+### Rate limit centralizzato
+
+- Login, registrazione, conferma email, richiesta di reset e consumo del token di reset hanno finestre fisse atomiche condivise in PostgreSQL.
+- Ogni operazione è limitata sia per indirizzo client sia per identificatore normalizzato; anche utenti o token inesistenti consumano il limite, evitando differenze utili all’enumerazione.
+- IP, email, username e token non vengono conservati nella tabella: la chiave è un digest HMAC-SHA-256 separato per scope. `RATE_LIMIT_SECRET` è obbligatorio in produzione e condiviso tra repliche.
+- Le risposte oltre soglia usano `429`, codice `RATE_LIMITED`, dettaglio del tempo residuo e header standard `Retry-After`; non vengono scritte una per una nell’error log per evitare log flooding.
+- `X-Forwarded-For` è considerato solo quando contiene un singolo IP valido e il peer TCP appartiene all’elenco esatto `TRUSTED_PROXY_IPS`, che include loopback per Caddy sullo stesso host. Un client diretto o una catena non normalizzata non possono cambiare bucket falsificando l’header.
+- I record scaduti vengono eliminati dal job di manutenzione tramite indice su `expires_at`.
+
+### Quota ed eviction della cache immagini
+
+- Solo una cache miss consuma il rate limit delle trasformazioni; varianti identiche già presenti non richiedono nuovo lavoro CPU.
+- Le generazioni concorrenti della stessa variante vengono aggregate e il numero complessivo di pipeline `Bun.Image` simultanee è limitato per processo.
+- La cache applica LRU tramite `mtime`, una quota globale predefinita di 512 MiB, massimo 10.000 file e massimo 20 varianti per asset. I limiti sono configurabili ma validati entro soglie finite, proteggendo sia spazio sia inode.
+- Le nuove varianti sono scritte su file temporaneo e rinominate atomicamente, evitando che una risposta serva contenuti parziali.
+- La manutenzione elimina anche file temporanei rimasti da processi interrotti, ma soltanto dopo un’ora per non interferire con trasformazioni attive.
+- Una finestra di grazia protegge i file usati recentemente dall’eviction durante le richieste; se non è possibile fare spazio, la nuova variante viene rimossa e la risposta usa `507 STORAGE_QUOTA_EXCEEDED`.
+- Asset id e nomi cache sono validati prima di costruire percorsi o glob, con test di regressione per path traversal.
+- Il job di manutenzione applica periodicamente l’eviction senza finestra di grazia e riporta soltanto conteggi e byte rimossi.
 
 ### Dipendenze email
 
@@ -69,8 +106,6 @@ Questi punti erano emersi durante l’audit ma non facevano parte degli interven
 
 ### Priorità alta
 
-- Manca un rate limit centralizzato per login, registrazione e richieste di reset/conferma.
-- Le trasformazioni immagini pubbliche possono generare molte varianti persistenti senza quota o eviction della cache.
 - Il seed usa credenziali demo note e non deve essere eseguito in ambienti esposti.
 
 ### Priorità media
@@ -81,15 +116,22 @@ Questi punti erano emersi durante l’audit ma non facevano parte degli interven
 - SMTP usa STARTTLS quando disponibile, ma non imposta ancora `requireTLS: true`.
 - Il middleware Basic Auth usa confronti stringa ordinari e considera non valide password contenenti `:`.
 
+### Dipendenze dal deployment
+
+- Il job OS-level è unico per utente del sistema operativo. Installazioni eseguite con utenti OS differenti possono comunque creare più job; le query idempotenti rendono questa eventualità sicura, ma il deployment deve scegliere un solo responsabile della schedulazione.
+- Il processo avviato dal task scheduler deve ricevere `DATABASE_URL` dal proprio ambiente; non deve essere inserito nella schedule o negli argomenti del processo, dove il segreto sarebbe esposto.
+- La quota filesystem viene serializzata nel singolo processo. Con una cache condivisa in rete tra più repliche, due eviction possono temporaneamente osservare lo stesso stato; scritture atomiche e manutenzione correggono l’eccesso, ma per una quota rigidamente globale va assegnata una cache separata a ogni replica o un unico processo responsabile delle trasformazioni.
+- Se Caddy è a sua volta dietro un proxy o una CDN, il deployment deve configurare `trusted_proxies` e `trusted_proxies_strict` in Caddy e sovrascrivere l’header upstream con `header_up X-Forwarded-For {client_ip}`. Bunsai deve fidarsi soltanto dell’indirizzo con cui Caddy raggiunge l’applicazione; in caso contrario una catena multi-hop viene ignorata e tutte quelle richieste condividono il bucket del peer Caddy.
+
 ## Verifiche automatiche
 
-Le modifiche sono coperte da test per composizione middleware, guard di ruolo, token di conferma email e selezione dell’attributo `Secure`. Prima del rilascio devono essere eseguiti almeno:
+Le modifiche sono coperte da test per composizione middleware, guard di ruolo, token di conferma email, selezione dell’attributo `Secure`, rate limit, proxy fidati, path traversal, trasformazioni e quote/eviction della cache. Prima del rilascio devono essere eseguiti almeno:
 
 ```bash
 bun run migrate
 bun run typecheck
-bun test
+bun run test
 bun audit
 ```
 
-Risultato della verifica locale: typecheck superato, 65 test superati, bundle frontend generato correttamente e nessun advisory rilevato da `bun audit`. La migration è stata aggiunta al repository ma non applicata automaticamente a un database esistente.
+Risultato della verifica locale: typecheck superato, 81 test paralleli superati, bundle frontend e metafile Markdown generati correttamente, nessun duplicato nel lockfile e nessun advisory rilevato da `bun audit` su 12 pacchetti. Le migration `0004_maintenance_indexes.sql` e `0005_rate_limits.sql` non sono state applicate automaticamente a un database.

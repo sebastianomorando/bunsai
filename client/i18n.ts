@@ -18,6 +18,7 @@ export const translations = {
     "error.conflict": "Conflict",
     "error.validation": "Validation failed",
     "error.rateLimited": "Too many requests",
+    "error.storageQuota": "Image cache quota exceeded",
     "error.internal": "Internal server error",
     "error.genericHttp": "Unexpected error",
 
@@ -177,6 +178,7 @@ export const translations = {
     "error.conflict": "Conflitto",
     "error.validation": "Validazione fallita",
     "error.rateLimited": "Troppe richieste",
+    "error.storageQuota": "Quota della cache immagini esaurita",
     "error.internal": "Errore interno del server",
     "error.genericHttp": "Errore imprevisto",
 

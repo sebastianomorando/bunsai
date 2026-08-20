@@ -1,8 +1,9 @@
 import { sql } from "bun";
 import Session from "./Session";
-import { Args, Param, Req, RequireAuth, RequireOwner, Route } from "../server/decorators";
+import { Args, Param, Req, RequireAuth, RequireOwner, Route, Server } from "../server/decorators";
 import { BadRequestError, NotFoundError, ValidationError } from "../server/errors";
 import { MAX_ASSET_BYTES, assetPath, ensureAssetDirectories, inspectImage, parseAssetTransform, removeAssetFiles, transformAsset } from "../server/assets";
+import { enforceRequestRateLimit } from "../server/rateLimit";
 
 type AssetRecord = {
   id: string; storage_key: string; filename: string; title: string | null;
@@ -94,12 +95,16 @@ class Asset {
   }
 
   @Route("GET", "/assets/:id")
-  @Args(Param("id"), Req())
-  static async download(id: string, req: Bun.BunRequest) {
+  @Args(Param("id"), Req(), Server())
+  static async download(id: string, req: Bun.BunRequest, server: Bun.Server<unknown>) {
     const asset = await findAsset(id);
     const transform = parseAssetTransform(new URL(req.url), req.headers.get("accept") || "");
     if (transform && !asset.image_format) throw new ValidationError("Questo asset non è un'immagine trasformabile");
-    const file = transform ? await transformAsset(assetPath(asset.storage_key), asset.id, transform) : Bun.file(assetPath(asset.storage_key));
+    const file = transform
+      ? await transformAsset(assetPath(asset.storage_key), asset.id, transform, {
+          beforeGenerate: () => enforceRequestRateLimit("imageTransform", req, server),
+        })
+      : Bun.file(assetPath(asset.storage_key));
     if (!await file.exists()) throw new NotFoundError("File asset non trovato");
     const headers = new Headers({
       "Content-Type": transform ? file.type : asset.mime_type,

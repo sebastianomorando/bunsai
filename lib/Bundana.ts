@@ -2,13 +2,13 @@ import type { ErrorLike } from "bun";
 
 export type HttpMethod = "GET" | "POST" | "DELETE" | "PATCH" | "PUT" | "OPTIONS";
 
-export type Handler<WebSocketData> = (
-    req: Bun.BunRequest,
+export type Handler<WebSocketData, Path extends string = string> = (
+    req: Bun.BunRequest<Path>,
     server: Bun.Server<WebSocketData>
 ) => Response | Promise<Response>;
 
-export type Middleware<WebSocketData> = (
-    req: Bun.BunRequest,
+export type Middleware<WebSocketData, Path extends string = string> = (
+    req: Bun.BunRequest<Path>,
     server: Bun.Server<WebSocketData>,
     next: () => Promise<Response>
 ) => Response | Promise<Response>;
@@ -20,15 +20,9 @@ export type Route = {
     middlewares?: Middleware<any>[];
 };
 
-export type DirectoryRoute = {
-    dir: string;
-    statCache?: boolean;
-};
+export type DirectoryRoute = Bun.Serve.DirectoryRouteOptions;
 
-type Routes<WebSocketData> = Record<
-    string,
-    Bun.Serve.Routes<WebSocketData, string>[string] | DirectoryRoute
->;
+type Routes<WebSocketData> = Bun.Serve.Routes<WebSocketData, string>;
 
 /**
  * Bundana — a lightweight express-style layer for Bun's HTTP server
@@ -36,11 +30,9 @@ type Routes<WebSocketData> = Record<
  * 
  */
 type ListenOptions<WebSocketData> = Omit<
-    Bun.Serve.Options<WebSocketData, string>,
-    "routes" | "error" | "websocket"
-> & {
-    port?: number;
-};
+    Bun.Serve.HostnamePortServeOptions<WebSocketData>,
+    "error"
+>;
 
 export class Bundana<WebSocketData> {
     routes: Routes<WebSocketData>;
@@ -66,7 +58,7 @@ export class Bundana<WebSocketData> {
 
         if (this.server) {
             this.server.reload({
-                routes: this.routes as Bun.Serve.Routes<WebSocketData, string>
+                routes: this.routes
             });
         }
     }
@@ -93,7 +85,10 @@ export class Bundana<WebSocketData> {
         return bundle;
     }
 
-    private compose(handler: Handler<WebSocketData>, middlewares: Middleware<WebSocketData>[]): Handler<WebSocketData> {
+    private compose<Path extends string>(
+        handler: Handler<WebSocketData, Path>,
+        middlewares: Middleware<WebSocketData, Path>[]
+    ): Handler<WebSocketData, Path> {
         return async (req, server) => {
             let index = -1;
 
@@ -117,53 +112,57 @@ export class Bundana<WebSocketData> {
         };
     }
 
-    get(
-        path: string,
-        handler: (req: Bun.BunRequest, server: Bun.Server<WebSocketData>) => Response | Promise<Response>,
-        middlewares?: Middleware<WebSocketData>[]
-    ) {
+    get<Path extends string>(
+        path: Path,
+        handler: Handler<WebSocketData, Path>,
+        middlewares?: Middleware<WebSocketData, Path>[]
+    ): void {
         this.add("GET", path, handler, middlewares);
     }
 
-    post(
-        path: string,
-        handler: (req: Bun.BunRequest, server: Bun.Server<WebSocketData>) => Response | Promise<Response>,
-        middlewares?: Middleware<WebSocketData>[]
-    ) {
+    post<Path extends string>(
+        path: Path,
+        handler: Handler<WebSocketData, Path>,
+        middlewares?: Middleware<WebSocketData, Path>[]
+    ): void {
         this.add("POST", path, handler, middlewares);
     }
 
-    delete(
-        path: string,
-        handler: (req: Bun.BunRequest, server: Bun.Server<WebSocketData>) => Response | Promise<Response>,
-        middlewares?: Middleware<WebSocketData>[]
-    ) {
+    delete<Path extends string>(
+        path: Path,
+        handler: Handler<WebSocketData, Path>,
+        middlewares?: Middleware<WebSocketData, Path>[]
+    ): void {
         this.add("DELETE", path, handler, middlewares);
     }
 
-    patch(
-        path: string,
-        handler: (req: Bun.BunRequest, server: Bun.Server<WebSocketData>) => Response | Promise<Response>,
-        middlewares?: Middleware<WebSocketData>[]
-    ) {
+    patch<Path extends string>(
+        path: Path,
+        handler: Handler<WebSocketData, Path>,
+        middlewares?: Middleware<WebSocketData, Path>[]
+    ): void {
         this.add("PATCH", path, handler, middlewares);
     }
 
-    put(
-        path: string,
-        handler: (req: Bun.BunRequest, server: Bun.Server<WebSocketData>) => Response | Promise<Response>,
-        middlewares?: Middleware<WebSocketData>[]
-    ) {
+    put<Path extends string>(
+        path: Path,
+        handler: Handler<WebSocketData, Path>,
+        middlewares?: Middleware<WebSocketData, Path>[]
+    ): void {
         this.add("PUT", path, handler, middlewares);
     }
 
-    add(
-        method: "GET" | "POST" | "DELETE" | "PATCH" | "PUT" | "OPTIONS",
-        path: string,
-        handler: Handler<WebSocketData>,
-        middlewares?: Middleware<WebSocketData>[]
-    ) {
-        const mws = [...this.middlewares, ...(middlewares ?? [])];
+    add<Path extends string>(
+        method: HttpMethod,
+        path: Path,
+        handler: Handler<WebSocketData, Path>,
+        middlewares?: Middleware<WebSocketData, Path>[]
+    ): void {
+        const mws: Middleware<WebSocketData, Path>[] = [
+            // Global middleware accepts every route; the literal path only narrows req.params.
+            ...this.middlewares as Middleware<WebSocketData, Path>[],
+            ...(middlewares ?? [])
+        ];
         const finalHandler = this.compose(handler, mws);
 
         const route = this.routes[path] ?? {};
@@ -175,7 +174,7 @@ export class Bundana<WebSocketData> {
 
         if (this.server) {
             this.server.reload({
-                routes: this.routes as Bun.Serve.Routes<WebSocketData, string>
+                routes: this.routes
             });
         }
     }
@@ -211,13 +210,15 @@ export class Bundana<WebSocketData> {
         }
         const resolvedPort = options?.port ?? this.port;
 
-        const serveOptions = {
+        const baseOptions = {
             ...options,
             routes: this.routes,
             port: resolvedPort,
-            websocket: this.websocket,
             error: this.errorHandler,
-        } as Bun.Serve.Options<WebSocketData, string>;
+        };
+        const serveOptions: Bun.Serve.Options<WebSocketData, string> = this.websocket
+            ? { ...baseOptions, websocket: this.websocket }
+            : baseOptions;
 
         this.server = Bun.serve(serveOptions);
         console.log(`Listening on port ${resolvedPort}`);
