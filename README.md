@@ -387,3 +387,17 @@ No lock-in: the code is yours, and you can change naming, conventions, security 
 - HTTP error handling: `server/ERRORS.md`
 - Security audit and residual risks: `SECURITY_AUDIT.md`
 - Coding agent instructions: `AGENTS.md`
+
+## PostgreSQL database manager
+
+Active administrators get a **Database** menu item (`/database`). Adapted from `bun-hex-battles` to Preact, signals and preact-iso, the manager lists `public` tables and views with table search, column structure, primary/foreign keys, defaults and generated fields. Data supports pagination, sorting and equality, substring and NULL filters.
+
+Application tables support inserts, updates and deletes, including composite primary keys. The editor distinguishes empty strings, NULL and database defaults; JSON, large numbers and dates retain their PostgreSQL text representation without lossy JavaScript conversions. Enter valid JSON text for JSON fields and PostgreSQL syntax for arrays. Generated values remain database-managed. Deletes require confirmation and retain database cascade semantics. Concurrent changes return a conflict rather than overwriting another update.
+
+Tables without primary keys allow browsing and insertion only; views and materialized views are read-only. `users` allows only `username` updates and `assets` only `title` updates. Use dedicated pages/APIs for other account and file operations. `sessions`, `password_resets`, `rate_limits`, `app_setup` and `migrations` are read-only. Passwords, tokens, secrets and session IDs cannot be read, filtered or edited.
+
+The manager uses the project's PostgreSQL connection and needs no new dependencies or migrations. It does not accept arbitrary connections or raw SQL. Every `/api/database/tables` and `/api/database/tables/:table[/rows]` request verifies the current session, administrator role and activation. Writes require an origin allowed by `APP_URL`, as with initial setup.
+
+Limits: 500 tables, 128 columns, up to 50 rows per page (reduced for wide tables), 2000 pages and about one million characters per page. Cell values are limited to 4096 characters; longer values are truncated and cannot be edited. Write payloads are limited to 8 KiB. Shared rate limits allow 120 reads and 30 writes per minute per IP. Queries have a 3-second timeout, 1-second lock timeout and at most 4 simultaneous database operations per process.
+
+Integration verification: apply migrations to an empty **disposable** database named `bunsai_database_tests`, then run `DATABASE_ADMIN_INTEGRATION=1 bun test server/databaseAdmin.integration.test.ts`. Tests create fixture users, sessions, tables and views. Security unit tests run in the standard suite.

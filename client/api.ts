@@ -25,6 +25,10 @@ import {
 } from "./types.ts";
 
 const apiCodeTranslations = {
+  DATABASE_STALE_ROW: "database.stale",
+  DATABASE_CONSTRAINT: "database.constraintError",
+  DATABASE_BUSY: "database.busy",
+  DATABASE_ERROR: "database.error",
   SETUP_COMPLETED: "setup.alreadyComplete",
   SETUP_ACCOUNT_EXISTS: "setup.accountExists",
   SETUP_BUSY: "setup.busy",

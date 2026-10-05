@@ -375,3 +375,17 @@ Nessun lock-in: il codice è tuo, puoi cambiare naming, convenzioni, sicurezza, 
 - Error handling HTTP: `server/ERRORS.md`
 - Audit di sicurezza e rischi residui: `SECURITY_AUDIT.md`
 - Istruzioni coding agents: `AGENTS.md`
+
+## Pannello database PostgreSQL
+
+Gli amministratori attivi trovano **Database** nel menu (`/database`). La pagina riprende il gestore di `bun-hex-battles`, integrato con Preact, signals e preact-iso. Mostra le tabelle e le viste dello schema `public`, ricerca delle tabelle, struttura delle colonne, chiavi primarie/esterne, valori predefiniti e campi generati. I dati hanno paginazione, ordinamento e filtri per uguaglianza, contenuto testuale e NULL.
+
+Le tabelle applicative aggiunte al progetto supportano inserimento, modifica ed eliminazione, anche con chiavi primarie composte. L'editor distingue valore vuoto, NULL e valore predefinito; JSON, numeri grandi e date mantengono la rappresentazione PostgreSQL senza conversioni JavaScript che perderebbero precisione. Per JSON usa testo JSON valido, per array la sintassi PostgreSQL. I campi generati sono gestiti dal database. Prima dell'eliminazione compare una conferma; i vincoli e le eventuali eliminazioni a cascata restano quelli del database. Un record cambiato nel frattempo restituisce un conflitto: aggiorna e ripeti la modifica.
+
+Le tabelle senza chiave primaria consentono solo lettura e inserimento; le viste, incluse quelle materializzate, sono in sola lettura. `users` permette soltanto la modifica di `username`, `assets` soltanto di `title`. Per le altre operazioni usa le pagine/API dedicate, che gestiscono password, sessioni e file. `sessions`, `password_resets`, `rate_limits`, `app_setup` e `migrations` sono in sola lettura. Password, token, segreti e identificativi di sessione non vengono restituiti, filtrati né modificati.
+
+Il pannello usa la connessione PostgreSQL del progetto: non richiede nuove dipendenze o migrazioni, né accetta connessioni arbitrarie o query SQL libere. Le API `/api/database/tables` e `/api/database/tables/:table[/rows]` verificano a ogni richiesta sessione, ruolo e attivazione. Le scritture richiedono l'origine consentita da `APP_URL`, come il setup iniziale.
+
+Limiti: 500 tabelle, 128 colonne, fino a 50 record per pagina (ridotti per tabelle larghe), 2000 pagine e circa un milione di caratteri per pagina. Ogni valore ha un massimo di 4096 caratteri; quelli più lunghi sono troncati e non modificabili dall'editor. I payload di scrittura sono limitati a 8 KiB. I limiti condivisi sono 120 letture e 30 scritture al minuto per IP; ogni query ha timeout di 3 secondi, attesa lock di 1 secondo e al massimo 4 operazioni database simultanee per processo.
+
+Verifica di integrazione: su un database **temporaneo** chiamato `bunsai_database_tests`, applica le migrazioni ed esegui `DATABASE_ADMIN_INTEGRATION=1 bun test server/databaseAdmin.integration.test.ts`. Usa un database vuoto: i test creano utenti, sessioni, tabelle e viste di prova. I test unitari di sicurezza fanno parte della suite standard.

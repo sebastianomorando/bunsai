@@ -11,6 +11,8 @@ function positiveEnv(name: string, fallback: number, maximum: number): number {
 }
 
 export const RATE_LIMIT_POLICIES = {
+  databaseRead: { scope: "database.read", limit: 120, windowMs: 60 * SECOND },
+  databaseWrite: { scope: "database.write", limit: 30, windowMs: 60 * SECOND },
   initialSetup: {
     scope: "auth.initial-setup",
     limit: positiveEnv("RATE_LIMIT_SETUP_MAX", 5, 100),

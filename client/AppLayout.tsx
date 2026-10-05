@@ -15,6 +15,7 @@ import { UserDetailPage } from "./pages/UserDetailPage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
 import { AssetsPage } from "./pages/AssetsPage.tsx";
 import { ProfilePage } from "./pages/ProfilePage.tsx";
+import { DatabasePage } from "./pages/DatabasePage.tsx";
 import { SetupPage } from "./pages/SetupPage";
 import logo from "./assets/bunsai-logo.svg";
 import {
@@ -25,6 +26,7 @@ import {
   resetUsersState,
   resetAssetsState,
   sessionState,
+  profileState,
   setError,
   setNotice,
   setupState,
@@ -102,6 +104,7 @@ export function AppLayout() {
               <a href="/users">{t("nav.users")}</a>
               <a href="/assets">{t("nav.assets")}</a>
               <a href="/profile">{t("nav.profile")}</a>
+              {profileState.value?.role === "admin" && profileState.value.isActive && <a href="/database">{t("nav.database")}</a>}
               <button type="button" class="linklike" onClick={onLogout}>
                 {t("nav.logout")}
               </button>
@@ -142,6 +145,8 @@ export function AppLayout() {
           <Route path="/users/:id" component={UserDetailPage} />
           <Route path="/assets" component={AssetsPage} />
           <Route path="/profile" component={ProfilePage} />
+          <Route path="/database" component={DatabasePage} />
+          <Route path="/database/:table" component={DatabasePage} />
           <Route path="*" component={NotFoundPage} />
         </Router>}
       </section>

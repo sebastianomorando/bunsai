@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import { t } from "./i18n.ts";
+import { resetDatabaseState } from "./databaseState.ts";
 import {
   DEFAULT_USERS_LIMIT,
   DEFAULT_USERS_SORT_BY,
@@ -33,6 +34,7 @@ export function emptyUsersPage(): PaginatedUsers {
 }
 
 export function resetUsersState() {
+  resetDatabaseState();
   usersState.value = emptyUsersPage();
   detailState.value = null;
   profileState.value = null;
