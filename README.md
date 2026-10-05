@@ -1,7 +1,7 @@
 # Bunsai
 
 <p align="center">
-  <img src="./client/assets/bunsai-logo.png" alt="Bunsai logo" width="180">
+  <img src="./client/assets/bunsai-logo.svg" alt="Bunsai logo" width="180">
 </p>
 
 `Bunsai` is not meant to be a framework you install, but a **repository you clone and hack**.

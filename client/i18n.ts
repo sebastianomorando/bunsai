@@ -76,7 +76,7 @@ export const translations = {
     "profile.passwordChanged": "Password updated. Sign in again with the new password.",
     "profile.emailConfirmationSent": "Check your new inbox to reactivate the account.",
 
-    "brand.title": "Bunsai Users",
+    "brand.title": "Admin Panel",
 
     "nav.login": "Login",
     "nav.register": "Register",
@@ -248,7 +248,7 @@ export const translations = {
     "profile.passwordChanged": "Password aggiornata. Accedi di nuovo con la nuova password.",
     "profile.emailConfirmationSent": "Controlla la nuova casella email per riattivare l’account.",
 
-    "brand.title": "Bunsai Users",
+    "brand.title": "Admin Panel",
 
     "nav.login": "Login",
     "nav.register": "Registrazione",

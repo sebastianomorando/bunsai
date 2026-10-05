@@ -16,7 +16,7 @@ import { UsersPage } from "./pages/UsersPage.tsx";
 import { AssetsPage } from "./pages/AssetsPage.tsx";
 import { ProfilePage } from "./pages/ProfilePage.tsx";
 import { SetupPage } from "./pages/SetupPage";
-import logo from "./assets/bunsai-logo.png";
+import logo from "./assets/bunsai-logo.svg";
 import {
   errorMessage,
   errorState,
