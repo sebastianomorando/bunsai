@@ -387,6 +387,8 @@ No lock-in: the code is yours, and you can change naming, conventions, security 
 - HTTP error handling: `server/ERRORS.md`
 - Security audit and residual risks: `SECURITY_AUDIT.md`
 - Coding agent instructions: `AGENTS.md`
+- Notifications, toast feedback, internal chat and admin communications: `COMMUNICATIONS.md`
+- Media library adapted from Fabulab CMS: `ASSET_MANAGEMENT.md`
 
 ## PostgreSQL database manager
 
@@ -415,3 +417,9 @@ Active administrators can use **Users → Create user** to set username, email, 
 Apply `bun run migrate` for `0008_user_management.sql` (Compose applies it on Bun service restart). Configure reachable `APP_URL` and `MAIL_*`; local mail is captured by Mailpit at `http://127.0.0.1:8025`. Password reset links expire after one hour. Email delivery is limited to 20/hour per IP and 3/hour per recipient.
 
 Opt-in integration tests require the disposable `bunsai_user_admin_tests` database, all migrations, and local Mailpit SMTP `127.0.0.1:1025` / API `127.0.0.1:8025`: `USER_ADMIN_INTEGRATION=1 DATABASE_URL=postgres://…/bunsai_user_admin_tests bun test server/userAdmin.integration.test.ts --timeout 30000`. The tests clear this database; never use the application database.
+
+### Notifications, internal chat and admin communications
+
+Signed-in active users get a notification bell and **Chat** for private direct/group conversations. Application feedback uses dismissible toasts. Active administrators get **Communications** to send custom notifications, emails or both to all active users, selected users or saved recipient groups, with a preview and delivery history. Chat content is accessible only to participants, including when the current user is an administrator; communication tables are excluded from the generic database manager.
+
+Apply `0009_communications.sql` with `bun run migrate` or `docker compose restart bun`. The persistent email queue uses existing `MAIL_*` settings; local deliveries appear in Mailpit. See [COMMUNICATIONS.md](COMMUNICATIONS.md) for delivery/retry semantics, realtime, limits, retention and integration tests. Adapted from Fabulab CMS through the GitHub plugin.

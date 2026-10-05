@@ -403,3 +403,13 @@ Dalla pagina **Utenti**, gli amministratori attivi possono creare account con us
 Applicare `bun run migrate` per la migration `0008_user_management.sql` (Compose la esegue al riavvio del servizio Bun). Configurare `APP_URL` con l'URL raggiungibile dai destinatari e le variabili `MAIL_*`; in locale le email arrivano su Mailpit, `http://127.0.0.1:8025`. Il reset scade dopo un'ora. Gli invii sono limitati a 20/ora per IP e 3/ora per destinatario.
 
 I test di integrazione richiedono un database **temporaneo** chiamato `bunsai_user_admin_tests`, tutte le migration applicate e Mailpit su SMTP `127.0.0.1:1025` / API `127.0.0.1:8025`. Eseguire `USER_ADMIN_INTEGRATION=1 DATABASE_URL=postgres://…/bunsai_user_admin_tests bun test server/userAdmin.integration.test.ts --timeout 30000`. Il test cancella i dati di questo database; non usare il database applicativo.
+
+## Notifiche, chat interna e comunicazioni admin
+
+Gli utenti attivi autenticati hanno una campanella con notifiche lette/non lette e **Chat** per conversazioni private dirette o di gruppo. Gli avvisi dell'app usano toast chiudibili. Gli amministratori attivi hanno **Comunicazioni** per inviare notifiche personalizzate, email o entrambe a tutti gli utenti attivi, a utenti selezionati oppure a gruppi salvati, con anteprima e cronologia delle consegne. Le chat sono accessibili solo ai partecipanti, anche per gli admin; le tabelle delle comunicazioni sono escluse dalla console database generica.
+
+Applicare `0009_communications.sql` con `bun run migrate` oppure `docker compose restart bun`. La coda persistente usa le impostazioni `MAIL_*` esistenti; le consegne locali sono visibili in Mailpit. Consultare [COMMUNICATIONS.md](COMMUNICATIONS.md) per tentativi di consegna, realtime, limiti, conservazione e test. Il modulo è adattato da Fabulab CMS, consultato tramite il plugin GitHub.
+
+## Libreria media
+
+La pagina **Asset** riprende il frontend di Fabulab CMS: caricamento multiplo e drag & drop, griglia/elenco, ricerca, filtri, ordinamento, paginazione, selezione/cancellazione multipla e pannello dettagli con modifica di titolo/nome e copia dei link ottimizzati. Adattata a Bunsai, tradotta in italiano/inglese e compatibile con storage locale e MinIO/S3. Nessuna nuova migrazione. Dettagli e limiti in [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md).

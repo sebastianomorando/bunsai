@@ -6,63 +6,131 @@ import { RateLimitError } from "./errors";
 const SECOND = 1_000;
 function positiveEnv(name: string, fallback: number, maximum: number): number {
   const parsed = Number(process.env[name]);
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum) return fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum)
+    return fallback;
   return parsed;
 }
 
 export const RATE_LIMIT_POLICIES = {
-  adminUsersRead: { scope: "admin.users.read", limit: 120, windowMs: 60 * SECOND },
-  adminUsersWrite: { scope: "admin.users.write", limit: 30, windowMs: 60 * SECOND },
-  adminEmailRecipient: { scope: "admin.email.recipient", limit: 3, windowMs: 3600 * SECOND },
+  assetLibrary: { scope: 'assets.library', limit: 120, windowMs: 60 * SECOND },
+  assetMetadata: { scope: 'assets.metadata', limit: 30, windowMs: 60 * SECOND },
+  communicationRead: {
+    scope: "communications.read",
+    limit: 240,
+    windowMs: 60 * SECOND,
+  },
+  communicationWrite: {
+    scope: "communications.write",
+    limit: 60,
+    windowMs: 60 * SECOND,
+  },
+  communicationConnect: {
+    scope: "communications.connect",
+    limit: 30,
+    windowMs: 60 * SECOND,
+  },
+  communicationCampaign: {
+    scope: "communications.campaign",
+    limit: 6,
+    windowMs: 3600 * SECOND,
+  },
+  chatCreate: { scope: "chat.create", limit: 20, windowMs: 3600 * SECOND },
+  chatDaily: { scope: "chat.daily", limit: 1000, windowMs: 86400 * SECOND },
+  chatSend: { scope: "chat.send", limit: 30, windowMs: 60 * SECOND },
+  adminUsersRead: {
+    scope: "admin.users.read",
+    limit: 120,
+    windowMs: 60 * SECOND,
+  },
+  adminUsersWrite: {
+    scope: "admin.users.write",
+    limit: 30,
+    windowMs: 60 * SECOND,
+  },
+  adminEmailRecipient: {
+    scope: "admin.email.recipient",
+    limit: 3,
+    windowMs: 3600 * SECOND,
+  },
   adminEmail: { scope: "admin.email", limit: 20, windowMs: 3600 * SECOND },
-  invitationInspect: { scope: "invitations.inspect", limit: 30, windowMs: 60 * SECOND },
-  invitationAccept: { scope: "invitations.accept", limit: 5, windowMs: 900 * SECOND },
+  invitationInspect: {
+    scope: "invitations.inspect",
+    limit: 30,
+    windowMs: 60 * SECOND,
+  },
+  invitationAccept: {
+    scope: "invitations.accept",
+    limit: 5,
+    windowMs: 900 * SECOND,
+  },
   databaseRead: { scope: "database.read", limit: 120, windowMs: 60 * SECOND },
   databaseWrite: { scope: "database.write", limit: 30, windowMs: 60 * SECOND },
   initialSetup: {
     scope: "auth.initial-setup",
     limit: positiveEnv("RATE_LIMIT_SETUP_MAX", 5, 100),
-    windowMs: positiveEnv("RATE_LIMIT_SETUP_WINDOW_SECONDS", 900, 86_400) * SECOND,
+    windowMs:
+      positiveEnv("RATE_LIMIT_SETUP_WINDOW_SECONDS", 900, 86_400) * SECOND,
   },
   login: {
     scope: "auth.login",
     limit: positiveEnv("RATE_LIMIT_LOGIN_MAX", 10, 10_000),
-    windowMs: positiveEnv("RATE_LIMIT_LOGIN_WINDOW_SECONDS", 15 * 60, 86_400) * SECOND,
+    windowMs:
+      positiveEnv("RATE_LIMIT_LOGIN_WINDOW_SECONDS", 15 * 60, 86_400) * SECOND,
   },
   register: {
     scope: "auth.register",
     limit: positiveEnv("RATE_LIMIT_REGISTER_MAX", 5, 10_000),
-    windowMs: positiveEnv("RATE_LIMIT_REGISTER_WINDOW_SECONDS", 60 * 60, 86_400) * SECOND,
+    windowMs:
+      positiveEnv("RATE_LIMIT_REGISTER_WINDOW_SECONDS", 60 * 60, 86_400) *
+      SECOND,
   },
   passwordResetRequest: {
     scope: "auth.password-reset-request",
     limit: positiveEnv("RATE_LIMIT_PASSWORD_RESET_REQUEST_MAX", 5, 10_000),
-    windowMs: positiveEnv("RATE_LIMIT_PASSWORD_RESET_REQUEST_WINDOW_SECONDS", 60 * 60, 86_400) * SECOND,
+    windowMs:
+      positiveEnv(
+        "RATE_LIMIT_PASSWORD_RESET_REQUEST_WINDOW_SECONDS",
+        60 * 60,
+        86_400,
+      ) * SECOND,
   },
   passwordReset: {
     scope: "auth.password-reset",
     limit: positiveEnv("RATE_LIMIT_PASSWORD_RESET_MAX", 10, 10_000),
-    windowMs: positiveEnv("RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS", 60 * 60, 86_400) * SECOND,
+    windowMs:
+      positiveEnv("RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS", 60 * 60, 86_400) *
+      SECOND,
   },
   emailConfirmation: {
     scope: "auth.email-confirmation",
     limit: positiveEnv("RATE_LIMIT_EMAIL_CONFIRMATION_MAX", 10, 10_000),
-    windowMs: positiveEnv("RATE_LIMIT_EMAIL_CONFIRMATION_WINDOW_SECONDS", 60 * 60, 86_400) * SECOND,
+    windowMs:
+      positiveEnv(
+        "RATE_LIMIT_EMAIL_CONFIRMATION_WINDOW_SECONDS",
+        60 * 60,
+        86_400,
+      ) * SECOND,
   },
   imageTransform: {
     scope: "assets.transform",
     limit: positiveEnv("RATE_LIMIT_IMAGE_TRANSFORM_MAX", 30, 100_000),
-    windowMs: positiveEnv("RATE_LIMIT_IMAGE_TRANSFORM_WINDOW_SECONDS", 60, 86_400) * SECOND,
+    windowMs:
+      positiveEnv("RATE_LIMIT_IMAGE_TRANSFORM_WINDOW_SECONDS", 60, 86_400) *
+      SECOND,
   },
   s3AssetUpload: {
     scope: "assets.s3-upload",
     limit: positiveEnv("RATE_LIMIT_S3_ASSET_UPLOAD_MAX", 10, 100_000),
-    windowMs: positiveEnv("RATE_LIMIT_S3_ASSET_UPLOAD_WINDOW_SECONDS", 60, 86_400) * SECOND,
+    windowMs:
+      positiveEnv("RATE_LIMIT_S3_ASSET_UPLOAD_WINDOW_SECONDS", 60, 86_400) *
+      SECOND,
   },
   s3AssetDownload: {
     scope: "assets.s3-download",
     limit: positiveEnv("RATE_LIMIT_S3_ASSET_DOWNLOAD_MAX", 60, 100_000),
-    windowMs: positiveEnv("RATE_LIMIT_S3_ASSET_DOWNLOAD_WINDOW_SECONDS", 60, 86_400) * SECOND,
+    windowMs:
+      positiveEnv("RATE_LIMIT_S3_ASSET_DOWNLOAD_WINDOW_SECONDS", 60, 86_400) *
+      SECOND,
   },
 } as const;
 
@@ -87,7 +155,9 @@ function rateLimitSecret(): string {
   const configured = process.env.RATE_LIMIT_SECRET;
   if (configured && configured.length >= 32) return configured;
   if (process.env.NODE_ENV === "production") {
-    throw new Error("RATE_LIMIT_SECRET deve contenere almeno 32 caratteri in produzione");
+    throw new Error(
+      "RATE_LIMIT_SECRET deve contenere almeno 32 caratteri in produzione",
+    );
   }
   return "bunsai-development-rate-limit-secret";
 }
@@ -145,7 +215,9 @@ export function rateLimitKeyHash(scope: string, key: string): string {
 function normalizedIp(value: string | undefined | null): string | null {
   if (!value) return null;
   const trimmed = value.trim().replace(/^\[|\]$/g, "");
-  const withoutMappedPrefix = trimmed.startsWith("::ffff:") ? trimmed.slice(7) : trimmed;
+  const withoutMappedPrefix = trimmed.startsWith("::ffff:")
+    ? trimmed.slice(7)
+    : trimmed;
   return isIP(withoutMappedPrefix) ? withoutMappedPrefix : null;
 }
 
@@ -155,13 +227,13 @@ function trustedProxyAddresses(): Set<string> {
     configured
       .split(",")
       .map((value) => normalizedIp(value))
-      .filter((value): value is string => value !== null)
+      .filter((value): value is string => value !== null),
   );
 }
 
 export function requestClientAddress(
   req: Bun.BunRequest,
-  server: Bun.Server<unknown>
+  server: Bun.Server<unknown>,
 ): string {
   const peer = normalizedIp(server.requestIP?.(req)?.address) ?? "unknown";
   if (!trustedProxyAddresses().has(peer)) return peer;
@@ -175,7 +247,7 @@ export async function enforceRateLimit(
   policyName: RateLimitPolicyName,
   discriminator: "ip" | "key",
   key: string,
-  options: { now?: Date; store?: RateLimitStore } = {}
+  options: { now?: Date; store?: RateLimitStore } = {},
 ): Promise<void> {
   const policy = RATE_LIMIT_POLICIES[policyName];
   const now = options.now ?? new Date();
@@ -194,7 +266,7 @@ export async function enforceRateLimit(
 
   const retryAfterSeconds = Math.max(
     1,
-    Math.ceil((record.expiresAt.getTime() - now.getTime()) / SECOND)
+    Math.ceil((record.expiresAt.getTime() - now.getTime()) / SECOND),
   );
   throw new RateLimitError("Troppe richieste, riprova più tardi", {
     details: { retryAfterSeconds },
@@ -206,7 +278,7 @@ export async function enforceRequestRateLimit(
   policyName: RateLimitPolicyName,
   req: Bun.BunRequest,
   server: Bun.Server<unknown>,
-  secondaryKey?: string
+  secondaryKey?: string,
 ): Promise<void> {
   await enforceRateLimit(policyName, "ip", requestClientAddress(req, server));
   const normalizedKey = secondaryKey?.trim().toLowerCase();

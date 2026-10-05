@@ -1,24 +1,70 @@
 import { sql } from "bun";
 import Session from "./Session";
-import { Args, Param, Req, RequireAuth, RequireOwner, Route, Server } from "../server/decorators";
-import { BadRequestError, NotFoundError, ValidationError } from "../server/errors";
-import { MAX_ASSET_BYTES, inspectImage, parseAssetTransform, removeAssetFiles, transformAsset } from "../server/assets";
+import {
+  Args,
+  Param,
+  Req,
+  RequireAuth,
+  RequireOwner,
+  Route,
+  Server,
+} from "../server/decorators";
+import {
+  BadRequestError,
+  ConflictError,
+  NotAuthenticatedError,
+  NotFoundError,
+  ValidationError,
+} from "../server/errors";
+import {
+  parseAssetListQuery,
+  parseAssetMetadataInput,
+} from "../server/assetManagement";
+import { readSetupInput, validateSetupOrigin } from "../server/setup";
+import { accountTransaction } from "../server/userAdmin";
+import {
+  MAX_ASSET_BYTES,
+  inspectImage,
+  parseAssetTransform,
+  removeAssetFiles,
+  transformAsset,
+} from "../server/assets";
 import { getAssetStorage } from "../server/assetStorage";
 import type { AssetStorageKind } from "../server/assetStorage";
 import { enforceRequestRateLimit } from "../server/rateLimit";
 
 type AssetRecord = {
-  id: string; storage_key: string; storage_backend: AssetStorageKind; filename: string; title: string | null;
-  mime_type: string; size: number; width: number | null; height: number | null;
-  image_format: string | null; uploaded_by: string; date_created: Date; date_updated: Date | null;
+  id: string;
+  storage_key: string;
+  storage_backend: AssetStorageKind;
+  filename: string;
+  title: string | null;
+  mime_type: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  image_format: string | null;
+  uploaded_by: string;
+  date_created: Date;
+  date_updated: Date | null;
+  metadata_version: string;
 };
 
 function publicAsset(row: AssetRecord) {
   return {
-    id: row.id, filename: row.filename, title: row.title, mimeType: row.mime_type,
-    size: Number(row.size), width: row.width, height: row.height, format: row.image_format,
-    uploadedBy: row.uploaded_by, dateCreated: row.date_created, dateUpdated: row.date_updated,
+    id: row.id,
+    filename: row.filename,
+    title: row.title,
+    mimeType: row.mime_type,
+    size: Number(row.size),
+    width: row.width,
+    height: row.height,
+    format: row.image_format,
+    uploadedBy: row.uploaded_by,
+    dateCreated: row.date_created,
+    dateUpdated: row.date_updated,
     url: `/assets/${row.id}`,
+    version: row.metadata_version,
   };
 }
 
@@ -32,8 +78,10 @@ function imageMime(format: string | undefined) {
 }
 
 async function findAsset(id: string) {
-  if (!/^[0-9a-f-]{36}$/.test(id)) throw new NotFoundError("Asset non trovato");
-  const rows = await sql`SELECT * FROM assets WHERE id = ${id}`;
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))
+    throw new NotFoundError("Asset non trovato");
+  const rows =
+    await sql`SELECT *,xmin::text AS metadata_version FROM assets WHERE id = ${id}`;
   if (!rows.length) throw new NotFoundError("Asset non trovato");
   return rows[0] as AssetRecord;
 }
@@ -43,14 +91,23 @@ class Asset {
   @RequireAuth()
   @Args(Req(), Server())
   static async upload(req: Bun.BunRequest, server: Bun.Server<unknown>) {
+    validateSetupOrigin(req);
     const contentLength = Number(req.headers.get("content-length") || 0);
-    if (contentLength > MAX_ASSET_BYTES + 1_000_000) throw new ValidationError("File troppo grande");
+    if (contentLength > MAX_ASSET_BYTES + 1_000_000)
+      throw new ValidationError("File troppo grande");
     const storage = getAssetStorage();
-    if (storage.kind === "s3") await enforceRequestRateLimit("s3AssetUpload", req, server);
-    const form = await req.formData().catch(() => { throw new BadRequestError("Richiesta multipart/form-data non valida"); });
+    if (storage.kind === "s3")
+      await enforceRequestRateLimit("s3AssetUpload", req, server);
+    const form = await req.formData().catch(() => {
+      throw new BadRequestError("Richiesta multipart/form-data non valida");
+    });
     const file = form.get("file");
-    if (!(file instanceof File)) throw new ValidationError("Il campo file è obbligatorio");
-    if (!file.size || file.size > MAX_ASSET_BYTES) throw new ValidationError(`Il file deve essere inferiore a ${MAX_ASSET_BYTES} byte`);
+    if (!(file instanceof File))
+      throw new ValidationError("Il campo file è obbligatorio");
+    if (!file.size || file.size > MAX_ASSET_BYTES)
+      throw new ValidationError(
+        `Il file deve essere inferiore a ${MAX_ASSET_BYTES} byte`,
+      );
     const session = await Session.getFromRequest(req);
     if (!session) throw new BadRequestError("Sessione non disponibile");
 
@@ -58,40 +115,130 @@ class Asset {
     const image = await inspectImage(bytes);
     const id = Bun.randomUUIDv7();
     const storageKey = Bun.randomUUIDv7();
-    const mimeType = imageMime(image?.format) ?? (file.type || "application/octet-stream");
+    const mimeType =
+      imageMime(image?.format) ?? (file.type || "application/octet-stream");
     await storage.write(storageKey, bytes, mimeType);
     try {
       const rows = await sql`
         INSERT INTO assets (id, storage_key, storage_backend, filename, title, mime_type, size, width, height, image_format, uploaded_by)
         VALUES (${id}, ${storageKey}, ${storage.kind}, ${file.name.slice(0, 255) || "file"}, ${String(form.get("title") || "").slice(0, 255) || null}, ${mimeType}, ${file.size}, ${image?.width ?? null}, ${image?.height ?? null}, ${image?.format ?? null}, ${session.userId})
-        RETURNING *`;
-      return Response.json(publicAsset(rows[0] as AssetRecord), { status: 201 });
+        RETURNING *,xmin::text AS metadata_version`;
+      return Response.json(publicAsset(rows[0] as AssetRecord), {
+        status: 201,
+      });
     } catch (error) {
-      await removeAssetFiles(storageKey, id, storage.kind).catch(() => undefined);
+      await removeAssetFiles(storageKey, id, storage.kind).catch(
+        () => undefined,
+      );
       throw error;
     }
   }
 
   @Route("GET", "/api/assets")
   @RequireAuth()
-  @Args(Req())
-  static async list(req: Bun.BunRequest) {
+  @Args(Req(), Server())
+  static async list(req: Bun.BunRequest, server: Bun.Server<unknown>) {
     const session = await Session.getFromRequest(req);
     if (!session) throw new BadRequestError("Sessione non disponibile");
-    const rows = await sql`
-      SELECT * FROM assets
+    await enforceRequestRateLimit("assetLibrary", req, server, session.userId);
+    const query = parseAssetListQuery(new URL(req.url));
+    const search = query.q?.toLowerCase() ?? null;
+    const typePrefix =
+      query.type === "all" || query.type === "other" ? null : `${query.type}/%`;
+    const ascending = query.sortDir === "asc";
+    const countRows = await sql<{ total: number | string }[]>`
+      SELECT COUNT(*) AS total FROM assets
       WHERE uploaded_by = ${session.userId}
-      ORDER BY date_created DESC
-      LIMIT 100
+        AND (${search}::text IS NULL OR strpos(lower(filename),${search})>0 OR strpos(lower(COALESCE(title,'')),${search})>0)
+        AND (
+          ${query.type} = 'all'
+          OR (${query.type} = 'document' AND (mime_type LIKE 'application/%' OR mime_type LIKE 'text/%'))
+          OR (${query.type} = 'other' AND mime_type NOT LIKE 'image/%' AND mime_type NOT LIKE 'video/%' AND mime_type NOT LIKE 'audio/%' AND mime_type NOT LIKE 'application/%' AND mime_type NOT LIKE 'text/%')
+          OR (${typePrefix}::text IS NOT NULL AND mime_type LIKE ${typePrefix})
+        )
     `;
-    return { items: (rows as AssetRecord[]).map(publicAsset) };
+    const rows = await sql<AssetRecord[]>`
+      SELECT *,xmin::text AS metadata_version FROM assets
+      WHERE uploaded_by = ${session.userId}
+        AND (${search}::text IS NULL OR strpos(lower(filename),${search})>0 OR strpos(lower(COALESCE(title,'')),${search})>0)
+        AND (
+          ${query.type} = 'all'
+          OR (${query.type} = 'document' AND (mime_type LIKE 'application/%' OR mime_type LIKE 'text/%'))
+          OR (${query.type} = 'other' AND mime_type NOT LIKE 'image/%' AND mime_type NOT LIKE 'video/%' AND mime_type NOT LIKE 'audio/%' AND mime_type NOT LIKE 'application/%' AND mime_type NOT LIKE 'text/%')
+          OR (${typePrefix}::text IS NOT NULL AND mime_type LIKE ${typePrefix})
+        )
+      ORDER BY
+        CASE WHEN ${query.sortBy} = 'dateCreated' AND ${ascending} THEN date_created END ASC,
+        CASE WHEN ${query.sortBy} = 'dateCreated' AND NOT ${ascending} THEN date_created END DESC,
+        CASE WHEN ${query.sortBy} = 'title' AND ${ascending} THEN lower(COALESCE(title, filename)) END ASC,
+        CASE WHEN ${query.sortBy} = 'title' AND NOT ${ascending} THEN lower(COALESCE(title, filename)) END DESC,
+        CASE WHEN ${query.sortBy} = 'filename' AND ${ascending} THEN lower(filename) END ASC,
+        CASE WHEN ${query.sortBy} = 'filename' AND NOT ${ascending} THEN lower(filename) END DESC,
+        CASE WHEN ${query.sortBy} = 'size' AND ${ascending} THEN size END ASC,
+        CASE WHEN ${query.sortBy} = 'size' AND NOT ${ascending} THEN size END DESC,
+        id DESC
+      LIMIT ${query.limit} OFFSET ${query.offset}
+    `;
+    return Response.json(
+      {
+        items: rows.map(publicAsset),
+        total: Number(countRows[0]?.total ?? 0),
+        limit: query.limit,
+        offset: query.offset,
+        sortBy: query.sortBy,
+        sortDir: query.sortDir,
+        maxFileBytes: MAX_ASSET_BYTES,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  @Route("PATCH", "/api/assets/:id")
+  @RequireAuth()
+  @Args(Param("id"), Req(), Server())
+  static async update(
+    id: string,
+    req: Bun.BunRequest,
+    server: Bun.Server<unknown>,
+  ) {
+    validateSetupOrigin(req);
+    await findAsset(id);
+    const session = await Session.getFromRequest(req);
+    if (!session) throw new NotAuthenticatedError();
+    await enforceRequestRateLimit("assetMetadata", req, server, session.userId);
+    const input = parseAssetMetadataInput(await readSetupInput(req));
+    const result = await accountTransaction(null, async (tx) => {
+      const [active] =
+        await tx`SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=${session.id} AND s.user_id=${session.userId} AND s.expires_at>now() AND u.is_active=true FOR SHARE OF s,u`;
+      if (!active) throw new NotAuthenticatedError();
+      const rows =
+        await tx`UPDATE assets SET title=${input.title},filename=${input.filename},date_updated=now() WHERE id=${id} AND uploaded_by=${session.userId} AND xmin::text=${input.version} RETURNING *,xmin::text AS metadata_version`;
+      if (!rows.length) {
+        const [owned] =
+          await tx`SELECT id FROM assets WHERE id=${id} AND uploaded_by=${session.userId}`;
+        if (!owned) throw new NotFoundError("Asset non trovato");
+        throw new ConflictError("Asset modificato, ricarica i dati", {
+          code: "DATABASE_STALE_ROW",
+        });
+      }
+      return rows[0] as AssetRecord;
+    });
+    return Response.json(publicAsset(result), {
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 
   @Route("GET", "/api/assets/:id")
   @RequireOwner({
     param: "id",
     bypassRoles: [],
-    resolve: async (req) => (await findAsset((req as Bun.BunRequest & { params?: Record<string, string> }).params?.id ?? "")).uploaded_by,
+    resolve: async (req) =>
+      (
+        await findAsset(
+          (req as Bun.BunRequest & { params?: Record<string, string> }).params
+            ?.id ?? "",
+        )
+      ).uploaded_by,
   })
   @Args(Param("id"))
   static async metadata(id: string) {
@@ -100,20 +247,37 @@ class Asset {
 
   @Route("GET", "/assets/:id")
   @Args(Param("id"), Req(), Server())
-  static async download(id: string, req: Bun.BunRequest, server: Bun.Server<unknown>) {
+  static async download(
+    id: string,
+    req: Bun.BunRequest,
+    server: Bun.Server<unknown>,
+  ) {
     const asset = await findAsset(id);
-    const transform = parseAssetTransform(new URL(req.url), req.headers.get("accept") || "");
-    if (transform && !asset.image_format) throw new ValidationError("Questo asset non è un'immagine trasformabile");
+    const transform = parseAssetTransform(
+      new URL(req.url),
+      req.headers.get("accept") || "",
+    );
+    if (transform && !asset.image_format)
+      throw new ValidationError("Questo asset non è un'immagine trasformabile");
     const storage = getAssetStorage(asset.storage_backend);
-    if (!transform && storage.kind === "s3") await enforceRequestRateLimit("s3AssetDownload", req, server);
+    if (!transform && storage.kind === "s3")
+      await enforceRequestRateLimit("s3AssetDownload", req, server);
     const file = transform
-      ? await transformAsset(() => storage.read(asset.storage_key), asset.id, transform, {
-          beforeGenerate: () => enforceRequestRateLimit("imageTransform", req, server),
-        })
+      ? await transformAsset(
+          () => storage.read(asset.storage_key),
+          asset.id,
+          transform,
+          {
+            beforeGenerate: () =>
+              enforceRequestRateLimit("imageTransform", req, server),
+          },
+        )
       : await storage.read(asset.storage_key);
     const headers = new Headers({
       "Content-Type": transform ? file.type : asset.mime_type,
-      "Cache-Control": transform ? "public, max-age=31536000, immutable" : "public, max-age=3600",
+      "Cache-Control": transform
+        ? "public, max-age=31536000, immutable"
+        : "public, max-age=3600",
       "Content-Disposition": `${asset.image_format ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
       "X-Content-Type-Options": "nosniff",
     });
@@ -121,9 +285,14 @@ class Asset {
   }
 
   @Route("DELETE", "/api/assets/:id")
-  @RequireOwner({ param: "id", resolve: async (req) => (await findAsset((req as any).params?.id)).uploaded_by })
-  @Args(Param("id"))
-  static async delete(id: string) {
+  @RequireOwner({
+    param: "id",
+    resolve: async (req) =>
+      (await findAsset((req as any).params?.id)).uploaded_by,
+  })
+  @Args(Param("id"), Req())
+  static async delete(id: string, req: Bun.BunRequest) {
+    validateSetupOrigin(req);
     const asset = await findAsset(id);
     await removeAssetFiles(asset.storage_key, asset.id, asset.storage_backend);
     await sql`DELETE FROM assets WHERE id = ${id}`;

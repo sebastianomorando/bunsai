@@ -1,3 +1,5 @@
+import { registerCommunications } from "./server/communications";
+import { startCommunicationMailWorker } from "./server/communicationMail";
 import app from "./server/app.ts";
 import client from "./client/index.html";
 import User from "./entities/User.ts";
@@ -12,11 +14,13 @@ registerClassRoutes(app, Asset);
 registerClassRoutes(app, Setup);
 registerDatabaseAdmin(app);
 registerUserAdmin(app);
+registerCommunications(app);
 
 app.bundle("/*", client);
 
 if (import.meta.main) {
   app.listen();
+  startCommunicationMailWorker();
 }
 
 export default app;

@@ -1,3 +1,7 @@
+import { ToastCenter } from "./components/ToastCenter";
+import { NotificationCenter } from "./components/NotificationCenter";
+import { ChatPage } from "./pages/ChatPage";
+import { CommunicationsPage } from "./pages/CommunicationsPage";
 import { CreateUserPage, InvitationsPage, AcceptInvitationPage } from './pages/UserManagement';
 import { Route, Router, useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
@@ -21,8 +25,6 @@ import { SetupPage } from "./pages/SetupPage";
 import logo from "./assets/bunsai-logo.svg";
 import {
   errorMessage,
-  errorState,
-  noticeState,
   pendingState,
   resetUsersState,
   resetAssetsState,
@@ -102,6 +104,9 @@ export function AppLayout() {
             </>
           ) : (
             <>
+              <NotificationCenter key={sessionState.value.userId} />
+              <a href="/chat">{t("com.chat")}</a>
+              {profileState.value?.role === "admin" && profileState.value.isActive && <a href="/communications">{t("com.communications")}</a>}
               <a href="/users">{t("nav.users")}</a>
               <a href="/assets">{t("nav.assets")}</a>
               <a href="/profile">{t("nav.profile")}</a>
@@ -114,8 +119,7 @@ export function AppLayout() {
         </nav>
       </header>
 
-      {noticeState.value && <p class="banner success">{noticeState.value}</p>}
-      {errorState.value && <p class="banner error">{errorState.value}</p>}
+      <ToastCenter />
 
       <section class="content">
         {setupState.value === "loading" ? (
@@ -142,6 +146,8 @@ export function AppLayout() {
           <Route path="/forgot-password" component={ForgotPasswordPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/confirm-email" component={ConfirmEmailPage} />
+          <Route path="/chat" component={ChatPage} />
+          <Route path="/communications" component={CommunicationsPage} />
           <Route path="/users" component={UsersPage} />
           <Route path="/users/new" component={CreateUserPage} />
           <Route path="/invitations" component={InvitationsPage} />

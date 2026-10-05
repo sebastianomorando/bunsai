@@ -9,7 +9,10 @@ import { readSetupInput, validateSetupOrigin } from './setup';
 const CELL_LIMIT = 4096;
 const MAX_COLUMNS = 128;
 const MAX_PAGE = 2000;
-const protectedTables = new Set(['users', 'assets', 'sessions', 'password_resets', 'rate_limits', 'app_setup', 'migrations', 'user_invitations']);
+const protectedTables = new Set(['users', 'assets', 'sessions', 'password_resets', 'rate_limits', 'app_setup', 'migrations', 'user_invitations', 'notifications', 'notification_recipients', 'chat_conversations', 'chat_participants', 'chat_messages', 'communication_groups', 'communication_group_members', 'communication_campaigns', 'communication_email_jobs']);
+// Personal messages must stay behind participant/recipient authorization, even
+// when the generic database editor is enabled for an administrator.
+const privateCommunicationTables = new Set(['notifications', 'notification_recipients', 'chat_conversations', 'chat_participants', 'chat_messages', 'communication_groups', 'communication_group_members', 'communication_campaigns', 'communication_email_jobs']);
 // Match secrets even in newly added application tables. They are never selected,
 // filtered or ordered, and cannot be written through the generic editor.
 export function sensitiveColumn(table: string, name: string): boolean {
@@ -49,7 +52,7 @@ export async function listDatabaseTables(tx: SQL): Promise<{ name: string; kind:
     ORDER BY c.relname LIMIT 501
   `;
   if (rows.length > 500) throw new ValidationError('Troppe tabelle per il pannello database');
-  return rows as { name: string; kind: 'table' | 'view' }[];
+  return rows.filter((row: {name:string}) => !privateCommunicationTables.has(String(row.name))) as { name: string; kind: 'table' | 'view' }[];
 }
 
 export async function describeDatabaseTable(tx: SQL, name: string): Promise<DatabaseTable> {

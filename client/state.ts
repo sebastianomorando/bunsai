@@ -1,3 +1,5 @@
+import { pushToast, clearToasts } from "./toastState";
+import { resetCommunicationState } from "./communicationState";
 import { signal } from "@preact/signals";
 import { t } from "./i18n.ts";
 import { resetDatabaseState } from "./databaseState.ts";
@@ -35,6 +37,8 @@ export function emptyUsersPage(): PaginatedUsers {
 
 export function resetUsersState() {
   resetDatabaseState();
+  resetCommunicationState();
+  clearToasts();
   usersState.value = emptyUsersPage();
   detailState.value = null;
   profileState.value = null;
@@ -46,11 +50,13 @@ export function resetAssetsState() {
 
 export function setNotice(message: string | null) {
   noticeState.value = message;
+  pushToast("success", message);
   if (message) errorState.value = null;
 }
 
 export function setError(message: string | null) {
   errorState.value = message;
+  pushToast("error", message);
   if (message) noticeState.value = null;
 }
 

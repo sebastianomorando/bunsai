@@ -1,6 +1,8 @@
 import { t, type TranslationKey } from "./i18n.ts";
 import { MAX_AVATAR_FILE_BYTES } from "./avatarCrop";
 import {
+  resetUsersState,
+  resetAssetsState,
   detailState,
   emptyUsersPage,
   pendingState,
@@ -22,10 +24,13 @@ import {
   type UserSortBy,
   type Asset,
   type AssetList,
+  type AssetQuery,
   type UpdateProfileInput,
 } from "./types.ts";
 
 const apiCodeTranslations = {
+  CHAT_CLOSED: "com.closed",
+  COMMUNICATION_QUEUE_FULL: "com.queueFull",
   INVITATION_INVALID: "adminUsers.invalid",
   INVITATION_PENDING: "adminUsers.invitePending",
   ADMIN_ACCOUNT_EXISTS: "adminUsers.exists",
@@ -87,6 +92,7 @@ function localizedApiErrorMessage(
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const requestOwner = sessionState.value?.userId;
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -104,6 +110,9 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     : await res.text().catch(() => "");
 
   if (!res.ok) {
+    if (res.status === 401 && requestOwner && sessionState.value?.userId === requestOwner) {
+      sessionState.value = null; resetUsersState(); resetAssetsState();
+    }
     const json = payload as ApiJsonError | null;
     const code = json?.code;
     const fallback =
@@ -121,15 +130,26 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return payload as T;
 }
 
-export async function fetchAssets() {
+let assetRequest = 0;
+export async function fetchAssets(options: AssetQuery = {limit:100}, signal?: AbortSignal) {
+  const owner=sessionState.value?.userId, sequence=++assetRequest;
   pendingState.value = true;
   try {
-    const payload = await apiRequest<AssetList>("/api/assets");
-    assetsState.value = Array.isArray(payload.items) ? payload.items : [];
-    return assetsState.value;
+    const params=new URLSearchParams();
+    for(const [key,value] of Object.entries(options)) if(value!==undefined) params.set(key,String(value));
+    const payload = await apiRequest<AssetList>(`/api/assets?${params}`,{signal});
+    if(!signal?.aborted && sequence===assetRequest && owner && sessionState.value?.userId===owner) assetsState.value = payload.items;
+    return payload;
   } finally {
-    pendingState.value = false;
+    if(sequence===assetRequest) pendingState.value = false;
   }
+}
+
+export async function updateAsset(id: string, input: {title:string|null;filename:string;version?:string}) {
+  const owner=sessionState.value?.userId;
+  const updated=await apiRequest<Asset>(`/api/assets/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(input)});
+  if(owner && sessionState.value?.userId===owner) assetsState.value=assetsState.value.map(asset=>asset.id===id?updated:asset);
+  return updated;
 }
 
 export async function uploadAsset(file: File, title?: string) {
@@ -174,10 +194,11 @@ export async function fetchAvatarSource(id: string, signal?: AbortSignal): Promi
 }
 
 export async function deleteAsset(id: string) {
+  const owner=sessionState.value?.userId;
   pendingState.value = true;
   try {
     await apiRequest<void>(`/api/assets/${encodeURIComponent(id)}`, { method: "DELETE" });
-    assetsState.value = assetsState.value.filter((asset) => asset.id !== id);
+    if(owner && sessionState.value?.userId===owner) assetsState.value = assetsState.value.filter((asset) => asset.id !== id);
   } finally {
     pendingState.value = false;
   }

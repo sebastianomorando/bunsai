@@ -53,9 +53,13 @@ export type Asset = {
   dateCreated: string;
   dateUpdated: string | null;
   url: string;
+  version?: string;
 };
 
-export type AssetList = { items: Asset[] };
+export type AssetType = 'all'|'image'|'video'|'audio'|'document'|'other';
+export type AssetSortBy = 'dateCreated'|'title'|'filename'|'size';
+export type AssetQuery = {q?: string; type?: AssetType; sortBy?: AssetSortBy; sortDir?: SortDirection; limit?: number; offset?: number};
+export type AssetList = { items: Asset[]; total: number; limit: number; offset: number; sortBy: AssetSortBy; sortDir: SortDirection; maxFileBytes?: number };
 
 export type UpdateProfileInput = {
   username: string;
