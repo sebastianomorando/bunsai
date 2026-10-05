@@ -21,7 +21,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: "3030"
-      APP_URL: http://localhost:${PORT:-3030}
+      APP_URL: ${APP_URL:-http://localhost:${PORT:-3030}}
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/database
       MAIL_SERVER: mailpit
       MAIL_PORT: "1025"

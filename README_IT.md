@@ -88,6 +88,18 @@ Il seed ripristina credenziali demo note a ogni esecuzione. Non eseguirlo mai in
 bun run start
 ```
 
+## Configurazione del primo amministratore
+
+Dopo le migrazioni, apri l’app nel browser. Se non è mai stato creato un amministratore, vieni indirizzato automaticamente a `/setup`: inserisci email, username e una password da 12 a 128 caratteri. L’account viene creato con ruolo `admin`, subito attivo, senza invio di email; poi accedi dalla pagina di login.
+
+Imposta `APP_URL` all’origine esatta del browser (schema, host e porta). In sviluppo, se `APP_URL` è locale, il setup accetta anche gli alias `localhost`, `127.0.0.1` e `[::1]` con lo stesso schema e porta; Docker Compose rispetta un eventuale `APP_URL` impostato in `.env`. In produzione il setup richiede HTTPS e l’origine esatta. Completa la configurazione prima di rendere raggiungibile una nuova installazione a utenti non fidati: il primo visitatore può scegliere l’amministratore iniziale.
+
+La migrazione `0007_initial_setup.sql` riconosce gli amministratori già presenti, inclusi quelli creati dal seed, e non mostra il form. Dopo il completamento, il setup non si riapre se l’ultimo admin viene cancellato, disattivato o perde il ruolo; un recupero richiede un intervento autorizzato sul database. Cambiare email o username nel form non promuove un utente esistente.
+
+`GET /api/setup` restituisce solo `{ required: boolean }`; `POST /api/setup` crea il primo admin una sola volta con controlli di origine, dimensione e rate limit (5 tentativi per IP ogni 15 minuti). Puoi configurare il limite tramite `RATE_LIMIT_SETUP_*` in `.env.example`. Concorrenza tra repliche e richieste simultanee è serializzata da PostgreSQL.
+
+Per le regressioni reali prepara un database usa e getta `bunsai_setup_tests`, applica le migrazioni, quindi esegui `SETUP_INTEGRATION=1 bun test server/setup.integration.test.ts` con `DATABASE_URL` di quel database. Questi test modificano utenti e stato di installazione e sono esclusi dalla suite standard.
+
 ## Sviluppo con Docker Compose
 
 Con Docker e Compose v2.24 o successivo puoi avviare Bun, PostgreSQL, Mailpit e MinIO senza installarli sul computer:

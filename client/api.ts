@@ -7,6 +7,7 @@ import {
   usersState,
   profileState,
   assetsState,
+  setupState,
 } from "./state.ts";
 import {
   DEFAULT_USERS_LIMIT,
@@ -24,6 +25,9 @@ import {
 } from "./types.ts";
 
 const apiCodeTranslations = {
+  SETUP_COMPLETED: "setup.alreadyComplete",
+  SETUP_ACCOUNT_EXISTS: "setup.accountExists",
+  SETUP_BUSY: "setup.busy",
   BAD_REQUEST: "error.badRequest",
   NOT_AUTHENTICATED: "error.notAuthenticated",
   ACCOUNT_INACTIVE: "error.accountInactive",
@@ -36,6 +40,23 @@ const apiCodeTranslations = {
   INTERNAL_SERVER_ERROR: "error.internal",
   HTTP_ERROR: "error.genericHttp",
 } as const satisfies Record<string, TranslationKey>;
+
+export async function fetchSetupStatus() {
+  setupState.value = "loading";
+  try {
+    const status = await apiRequest<{ required: boolean }>("/api/setup", { cache: "no-store" });
+    setupState.value = status.required ? "required" : "complete";
+    return status.required;
+  } catch (error) {
+    setupState.value = "error";
+    throw error;
+  }
+}
+
+export async function createAdmin(input: { username: string; email: string; password: string }) {
+  await apiRequest("/api/setup", { method: "POST", body: JSON.stringify(input) });
+  setupState.value = "complete";
+}
 
 function localizedApiErrorMessage(
   code: string | undefined,

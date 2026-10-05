@@ -1,6 +1,6 @@
 import { Route, Router, useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
-import { apiRequest, bootstrapFromCookie } from "./api.ts";
+import { apiRequest, bootstrapFromCookie, fetchSetupStatus } from "./api.ts";
 import { localeState, readStoredLocale, setLocale, t } from "./i18n.ts";
 import {
   ForgotPasswordPage,
@@ -15,6 +15,7 @@ import { UserDetailPage } from "./pages/UserDetailPage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
 import { AssetsPage } from "./pages/AssetsPage.tsx";
 import { ProfilePage } from "./pages/ProfilePage.tsx";
+import { SetupPage } from "./pages/SetupPage";
 import logo from "./assets/bunsai-logo.png";
 import {
   errorMessage,
@@ -26,16 +27,24 @@ import {
   sessionState,
   setError,
   setNotice,
+  setupState,
 } from "./state.ts";
 
 export function AppLayout() {
-  const { route } = useLocation();
+  const { route, path } = useLocation();
   const locale = localeState.value;
 
   useEffect(() => {
     setLocale(readStoredLocale());
-    void bootstrapFromCookie();
+    void fetchSetupStatus().then((required) => {
+      if (!required) return bootstrapFromCookie();
+    }).catch((error) => setError(errorMessage(error)));
   }, []);
+
+  useEffect(() => {
+    if (setupState.value === "required" && path !== "/setup") route("/setup", true);
+    if (setupState.value === "complete" && path === "/setup") route("/login", true);
+  }, [setupState.value, path]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -83,7 +92,7 @@ export function AppLayout() {
               <option value="it">{t("language.it")}</option>
             </select>
           </label>
-          {!sessionState.value ? (
+          {setupState.value !== "complete" ? null : !sessionState.value ? (
             <>
               <a href="/login">{t("nav.login")}</a>
               <a href="/register">{t("nav.register")}</a>
@@ -105,7 +114,24 @@ export function AppLayout() {
       {errorState.value && <p class="banner error">{errorState.value}</p>}
 
       <section class="content">
-        <Router>
+        {setupState.value === "loading" ? (
+          <section class="panel" role="status"><p>{t("setup.loading")}</p></section>
+        ) : setupState.value === "error" ? (
+          <section class="panel">
+            <p>{t("setup.loadError")}</p>
+            <button class="button" type="button" onClick={() => {
+              setError(null);
+              void fetchSetupStatus().then((required) => {
+                if (!required) return bootstrapFromCookie();
+              }).catch((error) => setError(errorMessage(error)));
+            }}>{t("setup.retry")}</button>
+          </section>
+        ) : setupState.value === "required" ? (
+          <Router>
+            <Route path="/setup" component={SetupPage} />
+            <Route path="*" component={SetupPage} />
+          </Router>
+        ) : <Router>
           <Route path="/" component={HomePage} />
           <Route path="/register" component={RegisterPage} />
           <Route path="/login" component={LoginPage} />
@@ -117,7 +143,7 @@ export function AppLayout() {
           <Route path="/assets" component={AssetsPage} />
           <Route path="/profile" component={ProfilePage} />
           <Route path="*" component={NotFoundPage} />
-        </Router>
+        </Router>}
       </section>
     </main>
   );

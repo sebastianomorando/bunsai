@@ -400,16 +400,25 @@ body {
   display: grid;
   gap: 0.78rem;
   max-width: 520px;
+  min-width: 0;
+}
+
+.panel.form {
+  width: 100%;
+  margin-inline: auto;
 }
 
 .form label {
   display: grid;
+  min-width: 0;
   gap: 0.35rem;
   font-size: 0.92rem;
   color: var(--muted);
 }
 
 .form input {
+  width: 100%;
+  min-width: 0;
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--line);
   background: #fff;
@@ -520,7 +529,7 @@ body {
 .details {
   margin: 0 0 1rem;
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 0.4rem 1rem;
 }
 
@@ -530,6 +539,7 @@ body {
 
 .details dd {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--muted);
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.88rem;

@@ -11,6 +11,11 @@ function positiveEnv(name: string, fallback: number, maximum: number): number {
 }
 
 export const RATE_LIMIT_POLICIES = {
+  initialSetup: {
+    scope: "auth.initial-setup",
+    limit: positiveEnv("RATE_LIMIT_SETUP_MAX", 5, 100),
+    windowMs: positiveEnv("RATE_LIMIT_SETUP_WINDOW_SECONDS", 900, 86_400) * SECOND,
+  },
   login: {
     scope: "auth.login",
     limit: positiveEnv("RATE_LIMIT_LOGIN_MAX", 10, 10_000),

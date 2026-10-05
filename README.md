@@ -88,6 +88,18 @@ The seed restores known demo credentials on every run. Never execute it in produ
 bun run start
 ```
 
+## First administrator setup
+
+After applying migrations, open the app in your browser. If an administrator has never been created, the app redirects to `/setup`. Enter an email address, username and a password with 12 to 128 characters. The account receives the `admin` role and is immediately active, without sending email; continue by signing in on the login page.
+
+Set `APP_URL` to the exact browser origin (scheme, host and port). In development, a local `APP_URL` also allows the `localhost`, `127.0.0.1` and `[::1]` aliases with the same scheme and port; Docker Compose respects an explicit `APP_URL` in `.env`. Production requires HTTPS and the exact origin. Complete setup before exposing a fresh installation to untrusted visitors: the first visitor can choose its initial administrator.
+
+Migration `0007_initial_setup.sql` recognizes existing administrators, including seeded accounts, and skips the form. Setup never reopens after completion if the last admin is deleted, disabled or demoted; recovery requires authorized database access. Existing users are never promoted through this form.
+
+`GET /api/setup` returns only `{ required: boolean }`; `POST /api/setup` creates the initial admin once, with origin checks, bounded inputs and a shared rate limit of 5 attempts per IP every 15 minutes. Configure `RATE_LIMIT_SETUP_*` through `.env.example`. PostgreSQL serializes concurrent requests across replicas.
+
+For real regressions, prepare a disposable database named `bunsai_setup_tests`, apply migrations, then run `SETUP_INTEGRATION=1 bun test server/setup.integration.test.ts` with its `DATABASE_URL`. These tests modify users and installation state and are skipped by the standard suite.
+
 ## Local development with Docker Compose
 
 With Docker and Compose v2.24 or newer, start Bun, PostgreSQL, Mailpit and MinIO:

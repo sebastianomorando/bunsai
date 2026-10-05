@@ -18,6 +18,7 @@ export const pendingState = signal(false);
 export const noticeState = signal<string | null>(null);
 export const errorState = signal<string | null>(null);
 export const assetsState = signal<Asset[]>([]);
+export const setupState = signal<"loading" | "required" | "complete" | "error">("loading");
 
 export function emptyUsersPage(): PaginatedUsers {
   return {
