@@ -130,7 +130,7 @@ function toPublicUser(value: unknown): PublicUser | null {
       (row.profileAssetId as string) ?? (row.profile_asset_id as string) ?? null,
     profileImageUrl:
       ((row.profileAssetId as string) ?? (row.profile_asset_id as string))
-        ? `/assets/${(row.profileAssetId as string) ?? (row.profile_asset_id as string)}?width=256&height=256&fit=fill&format=webp`
+        ? `/assets/${(row.profileAssetId as string) ?? (row.profile_asset_id as string)}?width=256&height=256&fit=inside&format=webp`
         : null,
   };
 }

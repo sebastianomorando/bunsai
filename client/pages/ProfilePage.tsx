@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useLocation } from "preact-iso";
-import { fetchAssets, fetchProfile, updateProfile, uploadAsset } from "../api.ts";
+import { fetchAssets, fetchAvatarSource, fetchProfile, updateProfile, uploadAsset } from "../api.ts";
+import { AvatarCropper } from "../components/AvatarCropper";
 import { t } from "../i18n.ts";
 import { assetsState, errorMessage, pendingState, profileState, resetAssetsState, resetUsersState, sessionState, setError, setNotice } from "../state.ts";
 
 export function ProfilePage() {
   const { route } = useLocation();
   const avatarInput = useRef<HTMLInputElement>(null);
+  const avatarRequest = useRef<AbortController | null>(null);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [loadingAvatar, setLoadingAvatar] = useState(false);
   const profile = profileState.value;
   const [username, setUsername] = useState(profile?.username ?? "");
   const [email, setEmail] = useState(profile?.email ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [profileAssetId, setProfileAssetId] = useState<string | null>(profile?.profileAssetId ?? null);
+
+  useEffect(() => {
+    setCropFile(null);
+    setLoadingAvatar(false);
+    return () => avatarRequest.current?.abort();
+  }, [sessionState.value?.userId]);
 
   useEffect(() => {
     if (!sessionState.value) return;
@@ -33,22 +43,36 @@ export function ProfilePage() {
   const ownedImages = assetsState.value.filter((asset) => asset.format && asset.uploadedBy === sessionState.value?.userId);
   const selectedAsset = assetsState.value.find((asset) => asset.id === profileAssetId);
   const avatarUrl = selectedAsset
-    ? `${selectedAsset.url}?width=256&height=256&fit=fill&format=webp`
+    ? `${selectedAsset.url}?width=256&height=256&fit=inside&format=webp`
     : profileAssetId === profile?.profileAssetId ? profile?.profileImageUrl : null;
 
   const onAvatarUpload = async (event: Event) => {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
     if (!file) return;
+    setCropFile(file);
+    if (avatarInput.current) avatarInput.current.value = "";
+  };
+
+  const onCropConfirm = async (file: File) => {
+    const owner = sessionState.value?.userId;
+    const asset = await uploadAsset(file, t("profile.avatarAssetTitle"));
+    if (!owner || sessionState.value?.userId !== owner) return;
+    if (!asset.format) throw new Error(t("profile.imageRequired"));
+    setProfileAssetId(asset.id);
+    setCropFile(null);
+    setNotice(t("profile.avatarReady"));
+  };
+
+  const onCropExisting = async () => {
+    if (!selectedAsset || selectedAsset.uploadedBy !== sessionState.value?.userId || !selectedAsset.format) return;
+    const controller = new AbortController();
+    avatarRequest.current?.abort(); avatarRequest.current = controller;
+    setLoadingAvatar(true);
     try {
-      const asset = await uploadAsset(file, t("profile.avatarAssetTitle"));
-      if (!asset.format) throw new Error(t("profile.imageRequired"));
-      setProfileAssetId(asset.id);
-      setNotice(t("profile.avatarReady"));
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      if (avatarInput.current) avatarInput.current.value = "";
-    }
+      const file = await fetchAvatarSource(selectedAsset.id, controller.signal);
+      if (!controller.signal.aborted) setCropFile(file);
+    } catch (error) { if (!controller.signal.aborted) setError(errorMessage(error)); }
+    finally { if (!controller.signal.aborted) setLoadingAvatar(false); }
   };
 
   const onSubmit = async (event: SubmitEvent) => {
@@ -84,9 +108,10 @@ export function ProfilePage() {
           {avatarUrl ? <img src={avatarUrl} alt={username} /> : <span>{(username[0] || "?").toUpperCase()}</span>}
         </div>
         <input ref={avatarInput} class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp" onChange={(event) => void onAvatarUpload(event)} />
-        <button type="button" class="button" disabled={pendingState.value} onClick={() => avatarInput.current?.click()}>{t("profile.uploadPicture")}</button>
-        {ownedImages.length > 0 && <label class="profile-picker">{t("profile.chooseAsset")}<select value={profileAssetId ?? ""} onChange={(event) => setProfileAssetId(event.currentTarget.value || null)}><option value="">{t("profile.noPicture")}</option>{ownedImages.map((asset) => <option key={asset.id} value={asset.id}>{asset.title || asset.filename}</option>)}</select></label>}
-        {profileAssetId && <button type="button" class="linklike danger-text" onClick={() => setProfileAssetId(null)}>{t("profile.removePicture")}</button>}
+        <button type="button" class="button" disabled={pendingState.value || loadingAvatar} onClick={() => avatarInput.current?.click()}>{t("profile.uploadPicture")}</button>
+        {ownedImages.length > 0 && <label class="profile-picker">{t("profile.chooseAsset")}<select disabled={pendingState.value || loadingAvatar} value={profileAssetId ?? ""} onChange={(event) => setProfileAssetId(event.currentTarget.value || null)}><option value="">{t("profile.noPicture")}</option>{ownedImages.map((asset) => <option key={asset.id} value={asset.id}>{asset.title || asset.filename}</option>)}</select></label>}
+        {profileAssetId && <button type="button" class="linklike danger-text" disabled={pendingState.value || loadingAvatar} onClick={() => setProfileAssetId(null)}>{t("profile.removePicture")}</button>}
+        {selectedAsset?.format && selectedAsset.uploadedBy === sessionState.value?.userId && <button type="button" class="button ghost" disabled={pendingState.value || loadingAvatar} onClick={() => void onCropExisting()}>{loadingAvatar ? t("profile.cropLoading") : t("profile.cropExisting")}</button>}
       </section>
 
       <section class="panel">
@@ -100,6 +125,7 @@ export function ProfilePage() {
           <button type="submit" class="button" disabled={pendingState.value || !username || !email || (!!newPassword && !currentPassword)}>{pendingState.value ? t("profile.saving") : t("profile.save")}</button>
         </form>
       </section>
+      {cropFile && <AvatarCropper file={cropFile} onCancel={() => setCropFile(null)} onConfirm={onCropConfirm} />}
     </div>
   );
 }

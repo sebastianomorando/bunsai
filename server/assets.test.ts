@@ -62,6 +62,13 @@ describe("asset transformations", () => {
     }
   });
 
+  test("keeps rectangular profile images proportional in a square thumbnail", async () => {
+    const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAYAAACzzX7wAAAAFklEQVQI12P8z8DwnwEPYGIgAChXAAAEoAIGqeUtXAAAAABJRU5ErkJggg=="), c => c.charCodeAt(0));
+    const options = parseAssetTransform(new URL("http://localhost/assets/id?width=256&height=256&fit=inside&format=webp&withoutEnlargement=false"))!;
+    const output = await transformAsset(async () => new Blob([png]), Bun.randomUUIDv7(), options);
+    expect(await new Bun.Image(output).metadata()).toMatchObject({ width: 256, height: 128 });
+  });
+
   test("loads remote images only on cache miss and shares concurrent transformations", async () => {
     const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="), c => c.charCodeAt(0));
     const id = Bun.randomUUIDv7();

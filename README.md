@@ -401,3 +401,7 @@ The manager uses the project's PostgreSQL connection and needs no new dependenci
 Limits: 500 tables, 128 columns, up to 50 rows per page (reduced for wide tables), 2000 pages and about one million characters per page. Cell values are limited to 4096 characters; longer values are truncated and cannot be edited. Write payloads are limited to 8 KiB. Shared rate limits allow 120 reads and 30 writes per minute per IP. Queries have a 3-second timeout, 1-second lock timeout and at most 4 simultaneous database operations per process.
 
 Integration verification: apply migrations to an empty **disposable** database named `bunsai_database_tests`, then run `DATABASE_ADMIN_INTEGRATION=1 bun test server/databaseAdmin.integration.test.ts`. Tests create fixture users, sessions, tables and views. Security unit tests run in the standard suite.
+
+## Profile picture cropping
+
+Profile pictures can be cropped before uploading: choose a file, drag it within the circular preview, adjust zoom and confirm. **Adjust selected picture** also crops an existing owned asset. The result is a new 512×512 PNG; existing originals are retained. Click **Save profile** to apply it. Supported formats are JPEG, PNG, WebP, GIF and BMP, up to 20 MiB and 40 megapixels; GIFs become static images.

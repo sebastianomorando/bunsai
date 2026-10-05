@@ -389,3 +389,7 @@ Il pannello usa la connessione PostgreSQL del progetto: non richiede nuove dipen
 Limiti: 500 tabelle, 128 colonne, fino a 50 record per pagina (ridotti per tabelle larghe), 2000 pagine e circa un milione di caratteri per pagina. Ogni valore ha un massimo di 4096 caratteri; quelli più lunghi sono troncati e non modificabili dall'editor. I payload di scrittura sono limitati a 8 KiB. I limiti condivisi sono 120 letture e 30 scritture al minuto per IP; ogni query ha timeout di 3 secondi, attesa lock di 1 secondo e al massimo 4 operazioni database simultanee per processo.
 
 Verifica di integrazione: su un database **temporaneo** chiamato `bunsai_database_tests`, applica le migrazioni ed esegui `DATABASE_ADMIN_INTEGRATION=1 bun test server/databaseAdmin.integration.test.ts`. Usa un database vuoto: i test creano utenti, sessioni, tabelle e viste di prova. I test unitari di sicurezza fanno parte della suite standard.
+
+## Ritaglio della foto profilo
+
+La foto profilo può essere regolata prima del caricamento: scegli il file, spostalo nell'anteprima circolare e regola lo zoom, quindi conferma. Puoi anche usare **Regola la foto selezionata** per ritagliare un tuo asset esistente. Il risultato è un nuovo PNG 512×512; l'originale viene conservato. Premi **Salva profilo** per applicarlo. Sono supportati JPEG, PNG, WebP, GIF e BMP fino a 20 MiB e 40 megapixel; GIF vengono convertite in un'immagine statica.

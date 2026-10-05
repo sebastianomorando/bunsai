@@ -650,3 +650,43 @@ body {
 @media (max-width: 680px) {
   .database-tabs .button, .database-toolbar .button { width: auto; }
 }
+
+.avatar-crop-dialog {
+  width: min(440px, calc(100% - 1.5rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.avatar-crop-dialog::backdrop { background: rgba(25, 30, 25, 0.55); }
+.avatar-crop-dialog h2 { margin: 0 0 0.5rem; }
+.avatar-crop-stage {
+  position: relative;
+  width: min(320px, 100%);
+  aspect-ratio: 1;
+  margin: 1rem auto;
+  overflow: hidden;
+  border-radius: 0.6rem;
+  background: #e4e9e2;
+  cursor: grab;
+  touch-action: none;
+}
+.avatar-crop-stage:active { cursor: grabbing; }
+.avatar-crop-stage:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.avatar-crop-stage canvas { display: block; width: 100%; height: 100%; }
+.avatar-crop-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 100px rgba(25, 30, 25, 0.6);
+  pointer-events: none;
+}
+.avatar-crop-zoom { display: grid; gap: 0.45rem; }
+.avatar-crop-zoom input { width: 100%; accent-color: var(--primary); }
+.avatar-crop-dialog .rowactions { margin-top: 1rem; justify-content: flex-end; }
+.avatar-crop-dialog > .linklike { margin-top: 0.5rem; }

@@ -1,4 +1,5 @@
 import { t, type TranslationKey } from "./i18n.ts";
+import { MAX_AVATAR_FILE_BYTES } from "./avatarCrop";
 import {
   detailState,
   emptyUsersPage,
@@ -126,17 +127,44 @@ export async function fetchAssets() {
 }
 
 export async function uploadAsset(file: File, title?: string) {
+  const owner = sessionState.value?.userId;
   pendingState.value = true;
   try {
     const form = new FormData();
     form.set("file", file);
     if (title?.trim()) form.set("title", title.trim());
     const asset = await apiRequest<Asset>("/api/assets", { method: "POST", body: form });
-    assetsState.value = [asset, ...assetsState.value];
+    if (owner && sessionState.value?.userId === owner && asset.uploadedBy === owner) assetsState.value = [asset, ...assetsState.value];
     return asset;
   } finally {
     pendingState.value = false;
   }
+}
+
+export async function fetchAvatarSource(id: string, signal?: AbortSignal): Promise<File> {
+  if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) throw new Error(t("profile.cropFailed"));
+  const response = await fetch(`/assets/${encodeURIComponent(id)}?width=2048&height=2048&fit=inside&format=webp`, { credentials: "include", signal });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(localizedApiErrorMessage(payload?.code, undefined, response.status));
+  }
+  if (!response.headers.get("Content-Type")?.startsWith("image/") || Number(response.headers.get("Content-Length")) > MAX_AVATAR_FILE_BYTES || !response.body) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error(t("profile.cropFailed"));
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const {value,done} = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_AVATAR_FILE_BYTES) throw new Error(t("profile.cropFailed"));
+      chunks.push(new Uint8Array(value));
+    }
+  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+  return new File(chunks, "profile-source.webp", {type:"image/webp"});
 }
 
 export async function deleteAsset(id: string) {
