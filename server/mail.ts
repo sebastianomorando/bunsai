@@ -32,6 +32,9 @@ function getTransporter() {
     host,
     port: readPort(process.env.MAIL_PORT),
     secure: process.env.MAIL_SECURE === "true",
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
     auth: username ? { user: username, pass: password } : undefined,
   });
   return transporter;

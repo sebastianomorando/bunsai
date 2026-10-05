@@ -31,6 +31,7 @@ export function UsersPage() {
     <div class="panel">
       <div class="row">
         <h2>{t("users.title")}</h2>
+        {profileState.value?.role === "admin" && profileState.value.isActive && <div class="rowactions"><a class="button" href="/users/new">{t("adminUsers.create")}</a><a class="button ghost" href="/invitations">{t("adminUsers.invites")}</a></div>}
         <div class="rowactions">
           <label class="limitcontrol">
             {t("users.sortBy")}

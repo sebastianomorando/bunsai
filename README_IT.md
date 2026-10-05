@@ -393,3 +393,13 @@ Verifica di integrazione: su un database **temporaneo** chiamato `bunsai_databas
 ## Ritaglio della foto profilo
 
 La foto profilo può essere regolata prima del caricamento: scegli il file, spostalo nell'anteprima circolare e regola lo zoom, quindi conferma. Puoi anche usare **Regola la foto selezionata** per ritagliare un tuo asset esistente. Il risultato è un nuovo PNG 512×512; l'originale viene conservato. Premi **Salva profilo** per applicarlo. Sono supportati JPEG, PNG, WebP, GIF e BMP fino a 20 MiB e 40 megapixel; GIF vengono convertite in un'immagine statica.
+
+### Gestione utenti e inviti
+
+Dalla pagina **Utenti**, gli amministratori attivi possono creare account con username, email, password iniziale (12–128 caratteri), ruolo e stato. Il dettaglio utente permette di modificarli, inviare una mail di reset password e consultare le sessioni con IP, browser, date e stato; è possibile revocare una singola sessione o tutte. Cambiare email, ruolo o stato revoca le sessioni e i reset pendenti. Non è possibile disattivare o demotare il proprio account admin; deve restare almeno un admin attivo. Le modifiche concorrenti richiedono di aggiornare i dati prima di salvare nuovamente.
+
+**Utenti → Inviti** invia link personali validi 7 giorni, in italiano o inglese, con ruolo assegnato dall'amministratore. Il destinatario sceglie username e password su `/accept-invitation`: l'email è quella invitata e l'account è subito attivo. Nessuna password viene inviata per email. Sono disponibili elenco paginato, nuovo invio (invalida il vecchio link) e revoca; gli inviti non promuovono account esistenti. L'admin che invita deve restare attivo e mantenere il ruolo per consentire l'accettazione.
+
+Applicare `bun run migrate` per la migration `0008_user_management.sql` (Compose la esegue al riavvio del servizio Bun). Configurare `APP_URL` con l'URL raggiungibile dai destinatari e le variabili `MAIL_*`; in locale le email arrivano su Mailpit, `http://127.0.0.1:8025`. Il reset scade dopo un'ora. Gli invii sono limitati a 20/ora per IP e 3/ora per destinatario.
+
+I test di integrazione richiedono un database **temporaneo** chiamato `bunsai_user_admin_tests`, tutte le migration applicate e Mailpit su SMTP `127.0.0.1:1025` / API `127.0.0.1:8025`. Eseguire `USER_ADMIN_INTEGRATION=1 DATABASE_URL=postgres://…/bunsai_user_admin_tests bun test server/userAdmin.integration.test.ts --timeout 30000`. Il test cancella i dati di questo database; non usare il database applicativo.

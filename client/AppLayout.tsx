@@ -1,3 +1,4 @@
+import { CreateUserPage, InvitationsPage, AcceptInvitationPage } from './pages/UserManagement';
 import { Route, Router, useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
 import { apiRequest, bootstrapFromCookie, fetchSetupStatus } from "./api.ts";
@@ -142,6 +143,9 @@ export function AppLayout() {
           <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/confirm-email" component={ConfirmEmailPage} />
           <Route path="/users" component={UsersPage} />
+          <Route path="/users/new" component={CreateUserPage} />
+          <Route path="/invitations" component={InvitationsPage} />
+          <Route path="/accept-invitation" component={AcceptInvitationPage} />
           <Route path="/users/:id" component={UserDetailPage} />
           <Route path="/assets" component={AssetsPage} />
           <Route path="/profile" component={ProfilePage} />

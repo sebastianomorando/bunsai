@@ -26,6 +26,12 @@ import {
 } from "./types.ts";
 
 const apiCodeTranslations = {
+  INVITATION_INVALID: "adminUsers.invalid",
+  INVITATION_PENDING: "adminUsers.invitePending",
+  ADMIN_ACCOUNT_EXISTS: "adminUsers.exists",
+  ADMIN_SELF_PROTECTED: "adminUsers.selfProtected",
+  ADMIN_LAST_PROTECTED: "adminUsers.lastProtected",
+  MAIL_DELIVERY_FAILED: "adminUsers.mailFailed",
   DATABASE_STALE_ROW: "database.stale",
   DATABASE_CONSTRAINT: "database.constraintError",
   DATABASE_BUSY: "database.busy",

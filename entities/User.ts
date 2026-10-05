@@ -14,6 +14,7 @@ import {
   RequireRole,
   Route,
   Serialize,
+  Server,
 } from "../server/decorators";
 import {
   ConflictError,
@@ -110,7 +111,7 @@ const MAX_USERS_LIMIT = 100;
 const DEFAULT_USERS_SORT_BY: UserSortBy = "date_created";
 const DEFAULT_USERS_SORT_DIR: SortDirection = "desc";
 
-function toPublicUser(value: unknown): PublicUser | null {
+export function toPublicUser(value: unknown): PublicUser | null {
   if (!value || typeof value !== "object") {
     return null;
   }
@@ -412,7 +413,18 @@ class User {
       await sendEmailConfirmation(nextEmail, activationToken);
     }
 
-    await sql.begin(async (tx) => {
+    const { accountTransaction } = await import('../server/userAdmin');
+    await accountTransaction(null, async (tx) => {
+      const [current] = await tx`SELECT role,is_active,email,username FROM users WHERE id=${user.id} FOR UPDATE`;
+      if (!current?.is_active) throw new NotAuthenticatedError("Sessione non valida");
+      if (current.email !== user.email || current.username !== user.username) {
+        throw new ConflictError("Il record è cambiato, aggiorna la pagina", { code: "DATABASE_STALE_ROW" });
+      }
+      if (emailChanged && current.role === "admin") {
+        const [admins] = await tx`SELECT count(*)::int AS total FROM users WHERE role='admin' AND is_active=true`;
+        if (admins.total <= 1) throw new ValidationError("Deve restare un amministratore attivo", { code: "ADMIN_LAST_PROTECTED" });
+      }
+
       await tx`
         UPDATE users
         SET
@@ -420,9 +432,9 @@ class User {
           email = ${nextEmail},
           profile_asset_id = ${nextProfileAssetId},
           is_active = ${emailChanged ? false : user.isActive},
-          activation_token = ${activationTokenHash},
-          activation_token_expires_at = ${activationTokenExpiresAt},
-          api_token = ${emailChanged ? null : user.apiToken},
+          activation_token = CASE WHEN ${emailChanged} THEN ${activationTokenHash} ELSE activation_token END,
+          activation_token_expires_at = CASE WHEN ${emailChanged} THEN ${activationTokenExpiresAt} ELSE activation_token_expires_at END,
+          api_token = CASE WHEN ${emailChanged} THEN NULL ELSE api_token END,
           date_updated = ${now}
         WHERE id = ${user.id}
       `;
@@ -503,8 +515,8 @@ class User {
   @Route("POST", "/api/login")
   @RateLimit("login", "username")
   @Serialize(serializeSessionPayload)
-  @Args(Body(), Req())
-  static async login(input: LoginInput, req?: Bun.BunRequest): Promise<Session> {
+  @Args(Body(), Req(), Server())
+  static async login(input: LoginInput, req?: Bun.BunRequest, server?: Bun.Server<unknown>): Promise<Session> {
     const identifier = typeof input?.username === "string" ? input.username.trim() : "";
     const password = typeof input?.password === "string" ? input.password : "";
     if (!identifier || !password) {
@@ -529,7 +541,7 @@ class User {
       });
     }
 
-    return Session.initNewSession(row.id, req);
+    return Session.initNewSession(row.id, req, server);
   }
 
   @Route("POST", "/api/logout")
@@ -698,6 +710,7 @@ class User {
   }
 
   @Route("PATCH", "/api/users/:id/activation")
+  @RateLimit("adminUsersWrite")
   @RequireRole("admin")
   @Serialize(serializeUserPayload)
   @Args(Param("id"), BodyField("isActive"), Req())
@@ -714,9 +727,14 @@ class User {
     if (!isActive && session.userId === id) {
       throw new ValidationError("Non puoi disattivare il tuo account amministratore");
     }
-    const user = await User.getById(id);
-    if (!user) throw new NotFoundError("Utente non trovato");
-    await user.setActive(isActive);
+    // Keep the legacy endpoint under the same transaction and origin checks.
+    const { validateSetupOrigin } = await import('../server/setup');
+    const { adminUserDetail, updateAdminManagedUser } = await import('../server/userAdmin');
+    validateSetupOrigin(req);
+    const { user, version } = await adminUserDetail(sql, id);
+    await updateAdminManagedUser(session.userId, id, {
+      username: user.username, email: user.email, role: user.role, isActive, version,
+    });
     const updated = await User.getById(id);
     if (!updated) throw new NotFoundError("Utente non trovato");
     return updated;

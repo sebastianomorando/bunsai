@@ -405,3 +405,13 @@ Integration verification: apply migrations to an empty **disposable** database n
 ## Profile picture cropping
 
 Profile pictures can be cropped before uploading: choose a file, drag it within the circular preview, adjust zoom and confirm. **Adjust selected picture** also crops an existing owned asset. The result is a new 512×512 PNG; existing originals are retained. Click **Save profile** to apply it. Supported formats are JPEG, PNG, WebP, GIF and BMP, up to 20 MiB and 40 megapixels; GIFs become static images.
+
+### User management and invitations
+
+Active administrators can use **Users → Create user** to set username, email, initial password (12–128 characters), role and status. User details include editing, sending a password reset email, and session inspection (IP, browser, creation/expiry, current session), with individual or bulk revocation. Email, role or status changes revoke existing sessions and outstanding resets. Administrators cannot disable or demote themselves; at least one active administrator must remain. Concurrent edits require refreshing the record.
+
+**Users → Invitations** provides paginated history, email invitations in English/Italian, resend and revocation. Personal links expire after 7 days; resending invalidates the previous link. Recipients choose username/password at `/accept-invitation`; email and role come from the invitation and accounts are immediately active. Passwords are never emailed. Existing accounts cannot be promoted through invitations, and the inviting administrator must remain active with the admin role.
+
+Apply `bun run migrate` for `0008_user_management.sql` (Compose applies it on Bun service restart). Configure reachable `APP_URL` and `MAIL_*`; local mail is captured by Mailpit at `http://127.0.0.1:8025`. Password reset links expire after one hour. Email delivery is limited to 20/hour per IP and 3/hour per recipient.
+
+Opt-in integration tests require the disposable `bunsai_user_admin_tests` database, all migrations, and local Mailpit SMTP `127.0.0.1:1025` / API `127.0.0.1:8025`: `USER_ADMIN_INTEGRATION=1 DATABASE_URL=postgres://…/bunsai_user_admin_tests bun test server/userAdmin.integration.test.ts --timeout 30000`. The tests clear this database; never use the application database.

@@ -1,5 +1,6 @@
 import { sql } from "bun";
 import User from "./User";
+import { requestClientAddress } from "../server/rateLimit";
 
 export const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 
@@ -57,14 +58,15 @@ class Session {
 
   static async initNewSession(
     userId: string,
-    req?: Bun.BunRequest
+    req?: Bun.BunRequest,
+    server?: Bun.Server<unknown>
   ): Promise<Session> {
     const sessionRecord: SessionRecord = {
       id: Bun.randomUUIDv7(),
       user_id: userId,
       expires_at: new Date(Date.now() + SESSION_DURATION_MS),
-      user_agent: req?.headers.get("user-agent") || "",
-      ip_address: req?.headers.get("x-forwarded-for") || "",
+      user_agent: (req?.headers.get("user-agent") || "").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 255),
+      ip_address: req && server ? requestClientAddress(req, server) : "",
     };
 
     await sql`INSERT INTO sessions ${sql(sessionRecord)}`;
@@ -86,14 +88,14 @@ class Session {
 
   static async getFromRequest(req: Bun.BunRequest): Promise<Session | null> {
     const sessionId = req.cookies.get("session_id");
-    if (!sessionId) {
+    if (!sessionId || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(sessionId)) {
       return null;
     }
 
     const rows = await sql`
-      SELECT id, user_id, expires_at, user_agent, ip_address
-      FROM sessions
-      WHERE id = ${sessionId} AND expires_at > ${new Date()}
+      SELECT s.id, s.user_id, s.expires_at, s.user_agent, s.ip_address
+      FROM sessions s JOIN users u ON u.id = s.user_id
+      WHERE s.id = ${sessionId} AND s.expires_at > ${new Date()} AND u.is_active = true
     `;
 
     if (rows.length === 0) {

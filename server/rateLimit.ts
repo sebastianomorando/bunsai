@@ -11,6 +11,12 @@ function positiveEnv(name: string, fallback: number, maximum: number): number {
 }
 
 export const RATE_LIMIT_POLICIES = {
+  adminUsersRead: { scope: "admin.users.read", limit: 120, windowMs: 60 * SECOND },
+  adminUsersWrite: { scope: "admin.users.write", limit: 30, windowMs: 60 * SECOND },
+  adminEmailRecipient: { scope: "admin.email.recipient", limit: 3, windowMs: 3600 * SECOND },
+  adminEmail: { scope: "admin.email", limit: 20, windowMs: 3600 * SECOND },
+  invitationInspect: { scope: "invitations.inspect", limit: 30, windowMs: 60 * SECOND },
+  invitationAccept: { scope: "invitations.accept", limit: 5, windowMs: 900 * SECOND },
   databaseRead: { scope: "database.read", limit: 120, windowMs: 60 * SECOND },
   databaseWrite: { scope: "database.write", limit: 30, windowMs: 60 * SECOND },
   initialSetup: {

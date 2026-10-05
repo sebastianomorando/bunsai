@@ -4,12 +4,14 @@ import User from "./entities/User.ts";
 import Asset from "./entities/Asset.ts";
 import Setup from "./server/setup.ts";
 import { registerDatabaseAdmin } from "./server/databaseAdmin.ts";
+import { registerUserAdmin } from "./server/userAdmin.ts";
 import { registerClassRoutes } from "./server/decorators.ts";
 
 registerClassRoutes(app, User);
 registerClassRoutes(app, Asset);
 registerClassRoutes(app, Setup);
 registerDatabaseAdmin(app);
+registerUserAdmin(app);
 
 app.bundle("/*", client);
 

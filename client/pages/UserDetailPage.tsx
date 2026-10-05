@@ -1,7 +1,8 @@
+import { AdminUserEditor } from './UserManagement';
 import { useEffect } from "preact/hooks";
 import { fetchUserDetail } from "../api.ts";
 import { formatRole, t } from "../i18n.ts";
-import { detailState, errorMessage, sessionState, setError } from "../state.ts";
+import { profileState, detailState, errorMessage, sessionState, setError } from "../state.ts";
 
 type UserDetailPageProps = {
   id?: string;
@@ -53,6 +54,7 @@ export function UserDetailPage(props: UserDetailPageProps) {
           <dd>{detailState.value.dateCreated || t("common.na")}</dd>
         </dl>
       )}
+      {profileState.value?.role === "admin" && profileState.value.isActive && <AdminUserEditor key={userId} id={userId} />}
       <a class="button ghost" href="/users">
         {t("detail.backToList")}
       </a>

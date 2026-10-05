@@ -1,14 +1,15 @@
 import { sql, type SQL } from 'bun';
+import { requireActiveAdmin } from './adminAuth';
 import type { Bundana } from '../lib/Bundana';
 import type { DatabaseColumn, DatabaseRow, DatabaseRows, DatabaseTable } from '../client/databaseTypes';
-import { ConflictError, errorToResponse, HttpError, NotAuthenticatedError, NotAuthorizedError, NotFoundError, ValidationError } from './errors';
+import { ConflictError, errorToResponse, HttpError, NotAuthorizedError, NotFoundError, ValidationError } from './errors';
 import { enforceRequestRateLimit } from './rateLimit';
 import { readSetupInput, validateSetupOrigin } from './setup';
 
 const CELL_LIMIT = 4096;
 const MAX_COLUMNS = 128;
 const MAX_PAGE = 2000;
-const protectedTables = new Set(['users', 'assets', 'sessions', 'password_resets', 'rate_limits', 'app_setup', 'migrations']);
+const protectedTables = new Set(['users', 'assets', 'sessions', 'password_resets', 'rate_limits', 'app_setup', 'migrations', 'user_invitations']);
 // Match secrets even in newly added application tables. They are never selected,
 // filtered or ordered, and cannot be written through the generic editor.
 export function sensitiveColumn(table: string, name: string): boolean {
@@ -24,17 +25,7 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 const tableSql = (name: string) => `"public".${quoteIdentifier(name)}`;
 
-export async function requireDatabaseAdmin(req: Bun.BunRequest): Promise<string> {
-  const sessionId = req.cookies.get('session_id');
-  if (!sessionId || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(sessionId)) throw new NotAuthenticatedError();
-  const [user] = await sql`
-    SELECT u.id, u.role, u.is_active FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.id = ${sessionId} AND s.expires_at > now()
-  `;
-  if (!user) throw new NotAuthenticatedError();
-  if (user.role !== 'admin' || user.is_active !== true) throw new NotAuthorizedError();
-  return String(user.id);
-}
+export const requireDatabaseAdmin = requireActiveAdmin;
 
 let activeQueries = 0;
 async function databaseTask<T>(run: (tx: SQL) => Promise<T>): Promise<T> {

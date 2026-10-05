@@ -690,3 +690,16 @@ body {
 .avatar-crop-zoom input { width: 100%; accent-color: var(--primary); }
 .avatar-crop-dialog .rowactions { margin-top: 1rem; justify-content: flex-end; }
 .avatar-crop-dialog > .linklike { margin-top: 0.5rem; }
+
+.admin-user-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 2rem; margin-block: 2rem; }
+.admin-user-grid > section { min-width: 0; }
+.admin-user-grid .form { margin-bottom: 1rem; }
+.form .checklabel { display: flex; align-items: center; gap: .5rem; }
+.form .checklabel input { width: auto; }
+.session-card { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.session-card dd { overflow-wrap: anywhere; }
+.invitation-form { max-width: 36rem; margin-bottom: 2rem; }
+@media (max-width: 850px) { .admin-user-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.authpanel { max-width: 36rem; width: 100%; margin-inline: auto; }
+.form select { padding: .65rem; border: 1px solid var(--line); border-radius: .6rem; background: white; max-width: 100%; }
