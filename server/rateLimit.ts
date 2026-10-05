@@ -41,6 +41,16 @@ export const RATE_LIMIT_POLICIES = {
     limit: positiveEnv("RATE_LIMIT_IMAGE_TRANSFORM_MAX", 30, 100_000),
     windowMs: positiveEnv("RATE_LIMIT_IMAGE_TRANSFORM_WINDOW_SECONDS", 60, 86_400) * SECOND,
   },
+  s3AssetUpload: {
+    scope: "assets.s3-upload",
+    limit: positiveEnv("RATE_LIMIT_S3_ASSET_UPLOAD_MAX", 10, 100_000),
+    windowMs: positiveEnv("RATE_LIMIT_S3_ASSET_UPLOAD_WINDOW_SECONDS", 60, 86_400) * SECOND,
+  },
+  s3AssetDownload: {
+    scope: "assets.s3-download",
+    limit: positiveEnv("RATE_LIMIT_S3_ASSET_DOWNLOAD_MAX", 60, 100_000),
+    windowMs: positiveEnv("RATE_LIMIT_S3_ASSET_DOWNLOAD_WINDOW_SECONDS", 60, 86_400) * SECOND,
+  },
 } as const;
 
 export type RateLimitPolicyName = keyof typeof RATE_LIMIT_POLICIES;

@@ -88,6 +88,43 @@ Il seed ripristina credenziali demo note a ogni esecuzione. Non eseguirlo mai in
 bun run start
 ```
 
+## Sviluppo con Docker Compose
+
+Con Docker e Compose v2.24 o successivo puoi avviare Bun, PostgreSQL, Mailpit e MinIO senza installarli sul computer:
+
+```bash
+docker compose up -d
+docker compose logs -f bun
+```
+
+Il file `.env` è opzionale; se esiste, Bun ne carica le impostazioni. Compose sovrascrive database, SMTP e S3 con gli indirizzi dei container locali. Bun installa le dipendenze dal lockfile, esegue le migrazioni dopo che PostgreSQL è pronto e avvia `dev` con reload automatico. Il codice è montato in sola lettura; dipendenze e dati usano volumi Docker separati. Non vengono creati utenti demo automaticamente.
+
+| Servizio | Indirizzo dal computer |
+| --- | --- |
+| App Bun | http://localhost:3030 |
+| PostgreSQL | `localhost:5432`, database `database`, utente `postgres`, password `password` |
+| Mailpit, interfaccia email | http://localhost:8025 |
+| Mailpit, SMTP | `localhost:1025`, senza autenticazione o TLS |
+| MinIO, API S3 | http://localhost:9000 |
+| MinIO, console | http://localhost:9001 |
+
+MinIO usa le credenziali locali `bunsai` / `bunsai-local-password`. Crea il bucket privato `bunsai` una volta, usando il client incluso nel container:
+
+```bash
+docker compose exec minio sh -ec 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mb --ignore-existing local/bunsai'
+```
+
+Se imposti `S3_BUCKET`, sostituisci `bunsai` nel comando con quel nome. Il container Bun riceve `S3_ENDPOINT=http://minio:9000`, `S3_REGION=us-east-1`, `S3_BUCKET` e le credenziali `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`. Imposta `ASSET_STORAGE=s3` in `.env` e ricrea Bun con `docker compose up -d bun` per salvare i nuovi asset in MinIO. Per test eseguiti sul computer usa invece `http://localhost:9000`. I download passano dall’applicazione, quindi il browser non deve raggiungere il nome interno `minio`.
+
+Le porte e le credenziali sono modificabili tramite le variabili commentate in `.env.example`; `PORT` controlla la porta dell’app sul computer. Per PostgreSQL usa una password URL-safe perché Compose la inserisce in `DATABASE_URL`. Le credenziali di PostgreSQL vengono inizializzate solo alla creazione del volume: modificarle nel file `.env` non aggiorna un database già esistente.
+
+```bash
+docker compose exec bun bun run seed # opzionale, solo dati demo locali
+docker compose down                 # conserva i dati
+```
+
+`docker compose down -v` elimina definitivamente tutti i volumi del progetto. Questa configurazione è destinata ai test locali: espone le porte solo su localhost, usa HTTP e credenziali note. MinIO Community non è più mantenuto; la release fissata deve rimanere confinata a dati di test (vedi `SECURITY_AUDIT.md`).
+
 ## Bootstrap con `bun create` (opzionale)
 
 Se vuoi partire direttamente da un template/repo usando Bun:
@@ -206,6 +243,29 @@ curl -i -b cookie.txt -X POST http://localhost:3030/api/logout
 ## API asset
 
 Gli asset sono salvati sotto `data/assets` per impostazione predefinita, mentre i metadata vivono in PostgreSQL. Ogni utente autenticato può elencare e leggere i metadata soltanto dei propri asset; l’URL `/assets/:id` resta pubblico.
+
+Per usare Amazon S3, MinIO, R2 o un servizio compatibile, applica la migrazione `0006_asset_storage.sql` con `bun run migrate` e configura:
+
+```dotenv
+ASSET_STORAGE=s3
+S3_BUCKET=bunsai
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
+# Per AWS puoi omettere l’endpoint; per MinIO fuori Docker:
+S3_ENDPOINT=http://localhost:9000
+S3_VIRTUAL_HOSTED_STYLE=false
+```
+
+L’implementazione usa [Bun.S3Client](https://bun.sh/docs/runtime/s3), senza SDK aggiuntivi. Sono supportati anche `S3_SESSION_TOKEN` per credenziali temporanee e i fallback `AWS_*`. `S3_VIRTUAL_HOSTED_STYLE=true` abilita gli endpoint con il bucket nel nome host. In produzione gli endpoint espliciti devono usare HTTPS; il bucket deve già esistere e restare privato. Non vengono impostate ACL pubbliche. Servono permessi `GetObject`, `PutObject` e `DeleteObject` sul bucket dedicato, più quelli necessari agli upload multipart.
+
+`ASSET_STORAGE` sceglie il backend dei nuovi upload. Ogni riga conserva `storage_backend`, mentre quelle esistenti vengono marcate `local`; cambiare modalità non trasferisce i file. Mantieni disponibili il filesystem e la configurazione S3 finché esistono righe che li usano. Tutti gli asset S3 usano il bucket configurato: cambiarlo richiede trasferire gli oggetti, conservando le chiavi UUID.
+
+Gli originali S3 sono scaricati dall’app con limiti di dimensione e concorrenza, e serviti dallo stesso URL `/assets/:id`. `MAX_ASSET_BYTES` è 25 MiB per default, configurabile fino a 100 MiB; questo limite vale anche per i download S3. Upload S3 e download degli originali S3 hanno rate limit condivisi per IP, rispettivamente 10 e 60 richieste al minuto, configurabili tramite `RATE_LIMIT_S3_ASSET_*` in `.env.example`. La cache delle varianti resta locale e viene letta senza contattare S3. Un errore del provider non provoca fallback al filesystem; la risposta usa `503 ASSET_STORAGE_UNAVAILABLE` senza dettagli o credenziali. La cancellazione elimina prima il file e poi la riga, così un errore storage lascia un record su cui ritentare.
+
+Il Compose costruisce MinIO e `mc` da release ufficiali fissate in `docker/minio/Dockerfile`, perché l’immagine precompilata non è più accessibile. Il primo avvio richiede rete e qualche minuto di compilazione; il build non include codice applicativo o `.env`.
+
+Per eseguire anche le regressioni delle API reali, prepara un database **usa e getta** chiamato `bunsai_asset_tests`, applica le migrazioni e configura un bucket privato di test. Con `ASSETS_DIR` e `ASSET_CACHE_DIR` su directory temporanee separate, esegui `ASSET_INTEGRATION=1 bun test server/assets.integration.test.ts`. La suite standard esclude questi test, che creano utenti e oggetti e verificano anche l’isolamento tra proprietari.
 
 Le trasformazioni vengono generate solo alla prima richiesta e poi servite dalla cache. Una cache miss è soggetta a rate limit per IP; richieste identiche già in cache non consumano il limite. La cache usa eviction LRU con quota globale (512 MiB), massimo 10.000 file, massimo 20 varianti per asset e al massimo due trasformazioni concorrenti per processo. Il job `maintenance` elimina periodicamente record rate-limit scaduti e varianti oltre quota.
 

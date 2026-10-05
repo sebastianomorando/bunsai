@@ -88,6 +88,43 @@ The seed restores known demo credentials on every run. Never execute it in produ
 bun run start
 ```
 
+## Local development with Docker Compose
+
+With Docker and Compose v2.24 or newer, start Bun, PostgreSQL, Mailpit and MinIO:
+
+```bash
+docker compose up -d
+docker compose logs -f bun
+```
+
+The `.env` file is optional. If present, its settings are passed to Bun; Compose overrides database, SMTP and S3 settings with local container addresses. Bun installs locked dependencies, runs migrations after PostgreSQL is ready, then starts `dev` with automatic reload. Source files are mounted read-only, while dependencies and data use separate Docker volumes. Demo users are not seeded automatically.
+
+| Service | Address from the host |
+| --- | --- |
+| Bun app | http://localhost:3030 |
+| PostgreSQL | `localhost:5432`, database `database`, user `postgres`, password `password` |
+| Mailpit email UI | http://localhost:8025 |
+| Mailpit SMTP | `localhost:1025`, without authentication or TLS |
+| MinIO S3 API | http://localhost:9000 |
+| MinIO console | http://localhost:9001 |
+
+MinIO uses local credentials `bunsai` / `bunsai-local-password`. Create the private `bunsai` bucket once using the bundled client:
+
+```bash
+docker compose exec minio sh -ec 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mb --ignore-existing local/bunsai'
+```
+
+If you set `S3_BUCKET`, replace `bunsai` in the command with that name. Bun receives `S3_ENDPOINT=http://minio:9000`, `S3_REGION=us-east-1`, `S3_BUCKET`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. Set `ASSET_STORAGE=s3` in `.env` and recreate Bun with `docker compose up -d bun` to store new assets in MinIO. Host-side tests should use `http://localhost:9000`. Downloads are served through the app, so browsers do not need access to the internal `minio` hostname.
+
+Override ports and credentials using the commented variables in `.env.example`; `PORT` controls the host app port. Use a URL-safe PostgreSQL password because Compose embeds it in `DATABASE_URL`. PostgreSQL credentials are initialized when its volume is first created; changing `.env` does not update an existing database.
+
+```bash
+docker compose exec bun bun run seed # optional local demo data only
+docker compose down                 # preserves data
+```
+
+`docker compose down -v` permanently deletes all project volumes. This stack is for local tests, with loopback-only ports, HTTP and known development credentials. MinIO Community is no longer maintained; keep the pinned release confined to test data (see `SECURITY_AUDIT.md`).
+
 ## Bootstrap with `bun create` (optional)
 
 ```bash
@@ -200,6 +237,29 @@ curl -i -b cookie.txt -X POST http://localhost:3030/api/logout
 ## Asset API
 
 Assets are stored outside the database (under `data/assets` by default), while metadata lives in PostgreSQL. Each authenticated user can list and read metadata only for their own assets; the asset URL itself is public.
+
+To use AWS S3, MinIO, R2 or a compatible provider, apply `0006_asset_storage.sql` with `bun run migrate` and configure:
+
+```dotenv
+ASSET_STORAGE=s3
+S3_BUCKET=bunsai
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
+# Omit the endpoint for AWS; for MinIO outside Docker:
+S3_ENDPOINT=http://localhost:9000
+S3_VIRTUAL_HOSTED_STYLE=false
+```
+
+Storage uses [Bun.S3Client](https://bun.sh/docs/runtime/s3) without additional SDKs. Temporary credentials use `S3_SESSION_TOKEN`; matching `AWS_*` fallbacks are supported. Set `S3_VIRTUAL_HOSTED_STYLE=true` for endpoints with the bucket in the hostname. Explicit production endpoints require HTTPS. Create the bucket beforehand and keep it private; uploads do not set public ACLs. Use scoped `GetObject`, `PutObject`, `DeleteObject` and required multipart permissions for a dedicated bucket.
+
+`ASSET_STORAGE` selects the backend for new uploads. Each row retains `storage_backend`; existing rows default to `local`, and switching modes does not transfer files. Keep local files and S3 configuration available while their rows exist. All S3 assets use the configured bucket; changing that bucket requires transferring objects with their UUID keys intact.
+
+S3 originals are downloaded through the app with size and concurrency limits and served at `/assets/:id`. `MAX_ASSET_BYTES` defaults to 25 MiB and supports values up to 100 MiB; S3 downloads also enforce this limit. S3 uploads and original downloads have shared per-IP rate limits of 10 and 60 requests per minute respectively, configurable through `RATE_LIMIT_S3_ASSET_*` in `.env.example`. Transformed variants stay in the local cache, and cache hits do not contact S3. Provider failures return a safe `503 ASSET_STORAGE_UNAVAILABLE` without falling back to local storage. Deletion removes storage before the database row, preserving a retryable record when storage fails.
+
+Compose builds MinIO and `mc` from pinned official releases in `docker/minio/Dockerfile`, as the prebuilt image is no longer accessible. The first start needs network access and a few minutes to compile; application files and `.env` are excluded from the build context.
+
+To run real API regressions, prepare a **disposable** database named `bunsai_asset_tests`, apply migrations, and configure a private test bucket. Set `ASSETS_DIR` and `ASSET_CACHE_DIR` to separate temporary directories, then run `ASSET_INTEGRATION=1 bun test server/assets.integration.test.ts`. The standard suite skips these tests, which create users and objects and verify owner isolation.
 
 ```bash
 # Upload

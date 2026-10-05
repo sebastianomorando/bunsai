@@ -1,10 +1,11 @@
 import { mkdir, readdir, rename, rm, stat, utimes } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { BadRequestError, RateLimitError, StorageQuotaError, ValidationError } from "./errors";
+import { ASSETS_DIR, getAssetStorage } from "./assetStorage";
+import type { AssetStorageKind } from "./assetStorage";
+export { ASSETS_DIR, MAX_ASSET_BYTES, assetPath } from "./assetStorage";
 
-export const ASSETS_DIR = resolve(process.env.ASSETS_DIR ?? "./data/assets");
 export const ASSET_CACHE_DIR = resolve(process.env.ASSET_CACHE_DIR ?? "./data/assets-cache");
-export const MAX_ASSET_BYTES = Number(process.env.MAX_ASSET_BYTES) || 25 * 1024 * 1024;
 export const MAX_IMAGE_PIXELS = Number(process.env.MAX_IMAGE_PIXELS) || 40_000_000;
 export const MAX_TRANSFORM_DIMENSION = Number(process.env.MAX_TRANSFORM_DIMENSION) || 4096;
 export const MAX_ASSET_CACHE_BYTES = Number(process.env.MAX_ASSET_CACHE_BYTES) || 512 * 1024 * 1024;
@@ -297,11 +298,6 @@ export function parseAssetTransform(url: URL, accept = ""): AssetTransform | nul
   };
 }
 
-export function assetPath(storageKey: string) {
-  if (!VALID_ASSET_ID_PATTERN.test(storageKey)) throw new BadRequestError("Storage key non valida");
-  return join(ASSETS_DIR, storageKey);
-}
-
 function validateAssetId(assetId: string): void {
   if (!VALID_ASSET_ID_PATTERN.test(assetId)) throw new BadRequestError("Asset id non valido");
 }
@@ -319,7 +315,7 @@ export async function inspectImage(bytes: Uint8Array) {
 }
 
 export async function transformAsset(
-  source: string,
+  source: string | (() => Promise<Blob>),
   assetId: string,
   transform: AssetTransform,
   options: TransformAssetOptions = {}
@@ -348,7 +344,8 @@ export async function transformAsset(
     const temporaryPath = join(ASSET_CACHE_DIR, `.tmp-${Bun.randomUUIDv7()}`);
     try {
       if (await Bun.file(cachePath).exists()) return Bun.file(cachePath);
-      let image = new Bun.Image(Bun.file(source), { maxPixels: MAX_IMAGE_PIXELS, autoOrient: true });
+      const input = typeof source === "string" ? Bun.file(source) : await source();
+      let image = new Bun.Image(input, { maxPixels: MAX_IMAGE_PIXELS, autoOrient: true });
       let resizeWidth = transform.width;
       if (resizeWidth === undefined && transform.height !== undefined) {
         const metadata = await image.metadata();
@@ -391,9 +388,10 @@ export async function transformAsset(
   }
 }
 
-export async function removeAssetFiles(storageKey: string, assetId: string) {
+export async function removeAssetFiles(storageKey: string, assetId: string, backend: AssetStorageKind = "local") {
   validateAssetId(assetId);
-  await rm(assetPath(storageKey), { force: true });
+  await getAssetStorage(backend).remove(storageKey);
+  await mkdir(ASSET_CACHE_DIR, { recursive: true });
   const glob = new Bun.Glob(`${assetId}-*`);
   for await (const filename of glob.scan(ASSET_CACHE_DIR)) {
     await rm(join(ASSET_CACHE_DIR, filename), { force: true });

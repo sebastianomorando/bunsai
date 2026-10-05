@@ -62,6 +62,35 @@ describe("asset transformations", () => {
     }
   });
 
+  test("loads remote images only on cache miss and shares concurrent transformations", async () => {
+    const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="), c => c.charCodeAt(0));
+    const id = Bun.randomUUIDv7();
+    const options = parseAssetTransform(new URL("http://localhost/assets/id?width=1&format=webp"))!;
+    let reads = 0;
+    let rateLimitCalls = 0;
+    const source = async () => { reads += 1; return new Blob([png]); };
+    const beforeGenerate = () => { rateLimitCalls += 1; };
+    const [first, second] = await Promise.all([
+      transformAsset(source, id, options, { beforeGenerate }),
+      transformAsset(source, id, options, { beforeGenerate }),
+    ]);
+    expect(first.name).toBe(second.name);
+    expect(reads).toBe(1);
+    expect(rateLimitCalls).toBe(1);
+    const cached = await transformAsset(async () => { throw new Error("S3 unavailable"); }, id, options);
+    expect(await cached.exists()).toBe(true);
+    expect(await new Bun.Image(cached).metadata()).toMatchObject({ width: 1, height: 1 });
+  });
+
+  test("does not download remote sources after rate limit rejection", async () => {
+    let reads = 0;
+    const options = parseAssetTransform(new URL("http://localhost/assets/id?width=1"))!;
+    await expect(transformAsset(async () => { reads += 1; return new Blob(); }, Bun.randomUUIDv7(), options, {
+      beforeGenerate: () => { throw new Error("Rate limited"); },
+    })).rejects.toThrow("Rate limited");
+    expect(reads).toBe(0);
+  });
+
   test("evicts the least recently used variants beyond the per-asset quota", async () => {
     await ensureAssetDirectories();
     const assetId = Bun.randomUUIDv7();
